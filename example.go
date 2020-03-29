@@ -9,7 +9,7 @@ import "fmt"
 // - Hover documentation
 // - Jump-to-definition
 // - Find-references
-// - Quick search with Cmd+/
+// - Quick search with Cmd+/ (or Win+/)
 
 type Public struct { key string }
 type Private struct {
