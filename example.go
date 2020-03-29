@@ -36,6 +36,7 @@ func getLength(pub Public) int {
 		key := pub.key
 		return len(key)
 	} else {
+		// Does this leak the private key? Which key is it?
 		fmt.Println(key.key)
 		return -1
 	}
