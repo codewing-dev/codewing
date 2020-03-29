@@ -5,6 +5,12 @@ import "fmt"
 // Does this program leak the private key? 🤔
 // How much harder would it be to determine that without CodeWyng?
 
+// Try these features:
+// - Hover documentation
+// - Jump-to-definition
+// - Find-references
+// - Quick search with Cmd+/
+
 type Public struct { key string }
 type Private struct {
 	// Is the private key ever leaked? Click to find references! 🔍
