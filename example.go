@@ -21,7 +21,7 @@ var key = Private{key: "abcsecret!"}
 var pub = Public{key: "abcpublic"}
 
 func main() {
-	initialize() // What does init() do? Hover to see documentation 📜
+	initialize() // What does this do? Hover to see documentation 📜
 	fmt.Println(getLength(pub))
 }
 
@@ -56,63 +56,7 @@ func getLength(pub Public) int {
 
 
 
-
-
-
-
-
-
-
-
-
-
-// keep scrolling...
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// almost there...
-
-
-
-
-
-
-
-
-
+// a bit further...
 
 
 

@@ -15,7 +15,7 @@ public class Demo {
 
     public static void main(String[] args) {
         Demo demo = new Demo();
-	    demo.initialize(); // What does init() do? Hover to see documentation 📜
+	    demo.initialize(); // What does this do? Hover to see documentation 📜
 	    System.out.println(demo.getLength(demo.pub));
     }
 
@@ -24,7 +24,7 @@ public class Demo {
         return key.length() == 64;
     }
 
-    // checkLength returns whether or not the key is 64 characters long.
+    // getLength returns the length of the key, or -1 if invalid.
     public int getLength(String k) {
     	if (checkLength(k)) {
     		return k.length();
