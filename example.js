@@ -20,8 +20,6 @@ function checkLength(key) {
   return key.length == 64
 }
 
-
-
 // getLength returns the length of the key, or -1 if invalid.
 function getLength(k) {
   if (checkLength(k)) {
