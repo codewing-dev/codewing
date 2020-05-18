@@ -6,7 +6,7 @@
   <br>
 </h1>
 
-<h4 align="center">Chrome extension for lightning fast code navigation on GitHub: hover documentation, jump-to-definition, and find-references</h4>
+<h4 align="center">Chrome extension for lightning fast code navigation on GitHub ⚡️</h4>
 
 <p align="center">
   <a href="https://chrome.google.com/webstore/detail/njkkfaliiinmkcckepjdmgbmjljfdeee">
