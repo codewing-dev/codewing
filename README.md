@@ -24,6 +24,7 @@
   <a href="https://codewyng.io">CodeWyng.io</a> •
   <a href="https://chrome.google.com/webstore/detail/njkkfaliiinmkcckepjdmgbmjljfdeee"><img src="chrome-web-store.png" align="center" width=20/> Chrome Web Store</a> •
   <a href="https://github.com/CodeWyng/codewyng">Issues</a> •
+  <a href="https://twitter.com/CodeWyng">@CodeWyng</a> •
   <a href="mailto:mail@codewyng.io">mail@codewyng.io</a>
   <br/>
   <br/>
