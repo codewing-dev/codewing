@@ -1017,9 +1017,8 @@ type RepoCommitPath = Repo & { commit: string } & { path: string }
 type RepoCommitPathPosition = Repo & { commit: string } & { path: string } & Position
 type RepoCommitPathRange = Repo & { commit: string } & { path: string } & Range
 
-const onDiff = (jsDiffTable: HTMLElement, repoPath: RepoPath): Subscribable<never> =>
+const onDiff = (jsDiffTable: HTMLElement, repoPath: RepoPath, commitSpec: CommitSpec): Subscribable<never> =>
   new Observable(subscriber => {
-    const commitSpec = determineCommitSpec()
     const getBaseStencil = _.once(() => fetchStencil({ ...repoPath, commit: commitSpec.base }))
     const getHeadStencil = _.once(() => fetchStencil({ ...repoPath, commit: commitSpec.head }))
     const { symbolAt } = mkSymbolAt()
@@ -1206,6 +1205,7 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
           })
         })
 
+      const commitSpec = determineCommitSpec()
       return observeJsFilesUnder(elDiffView, elJsFile => {
         const path = elJsFile.querySelector('.js-file-header')?.getAttribute('data-path')
         if (path === undefined || path === null) return new Subscription()
@@ -1224,7 +1224,7 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
                 })
               )
         )
-          .pipe(switchMap(jsDiffTable => onDiff(jsDiffTable, { ...repo, path })))
+          .pipe(switchMap(jsDiffTable => onDiff(jsDiffTable, { ...repo, path }, commitSpec)))
           .subscribe()
       })
     default:
