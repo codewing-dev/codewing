@@ -59,7 +59,9 @@ const md = new MarkdownIt({
     if (lang && hljs.getLanguage(lang)) {
       try {
         return hljs.highlight(lang, str).value
-      } catch (e) {}
+      } catch (e) {
+        return ''
+      }
     } else {
       return ''
     }
@@ -729,7 +731,7 @@ const tippystyleprops: Partial<Props> = {
   arrow: false,
   allowHTML: true,
   // interactive: true,
-  distance: 0,
+  offset: [0, 0],
   appendTo: document.body,
 }
 
