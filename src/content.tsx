@@ -966,6 +966,12 @@ const oldOnBlobPage = async () => {
   disableGitHubNative()
 }
 
+const touch = async (commit: RepoCommit): Promise<void> =>
+  await browser.runtime.sendMessage({
+    kind: 'touch',
+    args: commit,
+  })
+
 const onRepoPage = async () => {
   const div = document.createElement('div')
   $1('.blob-wrapper')?.parentElement?.prepend(div)
@@ -975,10 +981,8 @@ const onRepoPage = async () => {
     commit = determineCommit()
   } catch (e) {}
   if (commit) {
-    await browser.runtime.sendMessage({
-      kind: 'touch',
-      args: commit,
-    })
+    // tslint:disable-next-line: no-floating-promises
+    touch(commit)
   }
 }
 
@@ -1012,6 +1016,7 @@ const determineCommitSpec = (): CommitSpec => {
 }
 
 type Repo = { owner: string; repo: string }
+type RepoCommit = Repo & { commit: string }
 type RepoPath = Repo & { path: string }
 type RepoCommitPath = Repo & { commit: string } & { path: string }
 type RepoCommitPathPosition = Repo & { commit: string } & { path: string } & Position
