@@ -1211,6 +1211,11 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
         })
 
       const commitSpec = determineCommitSpec()
+      // tslint:disable-next-line: no-floating-promises
+      touch({ ...repo, commit: commitSpec.base })
+      // tslint:disable-next-line: no-floating-promises
+      touch({ ...repo, commit: commitSpec.head })
+
       return observeJsFilesUnder(elDiffView, elJsFile => {
         const path = elJsFile.querySelector('.js-file-header')?.getAttribute('data-path')
         if (path === undefined || path === null) return new Subscription()
