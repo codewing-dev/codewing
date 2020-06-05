@@ -70,7 +70,9 @@ module.exports = (env: any, argv: any) => {
       new ForkTsCheckerWebpackPlugin({ async: false }),
       new WebpackMessages(),
       new DefinePlugin({
-        SERVER_URL: JSON.stringify(dev ? process.env['CODEWYNG_URL'] : 'https://api.codewyng.io'),
+        SERVER_URL: JSON.stringify(
+          dev ? process.env['CODEWYNG_URL'] || 'https://api.codewyng.io' : 'https://api.codewyng.io'
+        ),
         DEV: JSON.stringify(true),
       }),
     ]),
