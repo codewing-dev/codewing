@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="128" height="128">
+	<defs>
+		<linearGradient id="grd1" gradientUnits="userSpaceOnUse"  x1="163.791" y1="604.367" x2="605.877" y2="416.713">
+			<stop offset="0" stop-color="#000000"  />
+			<stop offset="1" stop-color="#ffffff"  />
+		</linearGradient>
+		<linearGradient id="grd2" gradientUnits="userSpaceOnUse"  x1="-678.276" y1="963.023" x2="366.497" y2="-11.243">
+			<stop offset="0" stop-color="#000000"  />
+			<stop offset="0.812" stop-color="#ffffff"  />
+		</linearGradient>
+	</defs>
+	<style>
+		tspan { white-space:pre }
+		.shp0 { fill: #2082f3 } 
+		.shp1 { fill: url(#grd1) } 
+		.shp2 { fill: url(#grd2) } 
+	</style>
+	<path id="Shape 2" class="shp0" d="M512 1024C228.86 1024 0 795.14 0 512C0 228.86 228.86 0 512 0C795.14 0 1024 228.86 1024 512C1024 795.14 795.14 1024 512 1024Z" />
+	<path id="Shape 2" class="shp1" d="M786.73 739.19L535 691C535 691 512.56 599.51 520.5 493.7C528.44 387.89 593.64 281.89 593.64 281.89C593.64 281.89 594.4 399.08 636.57 512C695.94 670.97 786.73 739.19 786.73 739.19Z" />
+	<path id="Shape 1" class="shp2" d="M834.37 796.21C779.82 809.8 722.1 848.74 722.1 848.74C722.1 848.74 680.07 839.6 579.62 835.9C379.47 828.53 239.89 847.43 239.89 847.43L570.26 771.04C570.26 771.04 377.06 739.56 270.41 551.68C176.52 386.26 210.28 103.04 210.28 103.04C210.28 103.04 319.74 367.66 503.67 538.21C619.17 645.31 753.35 713.68 753.35 713.68C753.35 713.68 788.3 710.34 822.78 722.59C910.63 753.79 924.91 797.04 924.91 797.04C924.91 797.04 902.07 779.34 834.37 796.21Z" />
+</svg>

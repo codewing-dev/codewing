@@ -22,13 +22,13 @@
 
 <p align="center">
   <a href="https://codewyng.io">CodeWyng.io</a> •
-  <a href="https://chrome.google.com/webstore/detail/njkkfaliiinmkcckepjdmgbmjljfdeee"><img src="chrome-web-store.png" align="center" width=20/> Chrome Web Store</a> •
+  <a href="https://chrome.google.com/webstore/detail/njkkfaliiinmkcckepjdmgbmjljfdeee"><img src="readme/chrome-web-store.png" align="center" width=20/> Chrome Web Store</a> •
   <a href="https://github.com/CodeWyng/codewyng">Issues</a> •
   <a href="https://twitter.com/CodeWyng">@CodeWyng</a> •
   <a href="mailto:mail@codewyng.io">mail@codewyng.io</a>
   <br/>
   <br/>
-  <img src="demo.gif"/>
+  <img src="readme/demo.gif"/>
 </p>
 
 # Features
@@ -83,4 +83,14 @@
 <br>
 <br>
 
-Install CodeWyng from the <a href="https://chrome.google.com/webstore/detail/njkkfaliiinmkcckepjdmgbmjljfdeee"><img src="chrome-web-store.png" align="center" width=20/> Chrome Web Store</a>!
+Install CodeWyng from the <a href="https://chrome.google.com/webstore/detail/njkkfaliiinmkcckepjdmgbmjljfdeee"><img src="readme/chrome-web-store.png" align="center" width=20/> Chrome Web Store</a>!
+
+# Development
+
+1. Install Node.js and `npm install -g yarn`
+2. Run `./dev`
+3. Open chrome://extensions/
+4. Turn on **Developer mode**
+5. Click **Load unpacked**
+6. Select the `dist-dev` directory created by `./dev` above
+7. Try hovering on variables in https://github.com/gorilla/mux/blob/master/mux.go
