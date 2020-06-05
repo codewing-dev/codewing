@@ -574,7 +574,7 @@ const determineFile = (): RepoCommitPath => {
 }
 
 // same as determineFile, but ignores fileparts (it's either .../<blob|tree|commit>/...)
-const determineCommit = (): { owner: string; repo: string; commit: string } => {
+const determineCommit = (): { owner: string; repo: string; commit: string; ref?: string } => {
   const permalink = $1('[data-hotkey="y"]')
   if (!permalink) {
     throw new Error('expected to find permalink on page')
@@ -587,7 +587,10 @@ const determineCommit = (): { owner: string; repo: string; commit: string } => {
     permalinkHref = new URL(permalinkHref).pathname
   }
   const [_ignore, owner, repo, _treeOrBlob, commit] = permalinkHref.split('/')
-  return { owner, repo, commit }
+  const branchSelect = $1('.branch-select-menu>summary>i')?.textContent
+  const branchValue = $1('.branch-select-menu>summary>[data-menu-button]')?.textContent
+
+  return { owner, repo, commit, ref: (branchSelect === 'Branch:' && `refs/heads/${branchValue}`) || undefined }
 }
 
 const auth = async (): Promise<Auth> => {
@@ -966,10 +969,10 @@ const oldOnBlobPage = async () => {
   disableGitHubNative()
 }
 
-const touch = async (commit: RepoCommit): Promise<void> =>
+const touch = async (args: RepoCommit & { ref?: string }): Promise<void> =>
   await browser.runtime.sendMessage({
     kind: 'touch',
-    args: commit,
+    args,
   })
 
 const onRepoPage = async () => {
@@ -1187,7 +1190,8 @@ const onBlobPage = (): Subscribable<never> => {
 }
 
 const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => {
-  const [_prNumberAsString, prPageKind, ...prComponents] = pathComponents
+  const [prNumberAsString, prPageKind, ...prComponents] = pathComponents
+
   switch (prPageKind) {
     case 'files':
       const elDiffView = $1('.diff-view')
@@ -1212,9 +1216,9 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
 
       const commitSpec = determineCommitSpec()
       // tslint:disable-next-line: no-floating-promises
-      touch({ ...repo, commit: commitSpec.base })
+      touch({ ...repo, commit: commitSpec.base, ref: `refs/pull/${prNumberAsString}/head` })
       // tslint:disable-next-line: no-floating-promises
-      touch({ ...repo, commit: commitSpec.head })
+      touch({ ...repo, commit: commitSpec.head, ref: `refs/pull/${prNumberAsString}/head` })
 
       return observeJsFilesUnder(elDiffView, elJsFile => {
         const path = elJsFile.querySelector('.js-file-header')?.getAttribute('data-path')
