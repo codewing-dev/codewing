@@ -589,10 +589,14 @@ const determineCommit = (): { owner: string; repo: string; commit: string; ref?:
     permalinkHref = new URL(permalinkHref).pathname
   }
   const [_ignore, owner, repo, _treeOrBlob, commit] = permalinkHref.split('/')
-  const branchSelect = $1('.branch-select-menu>summary>i')?.textContent
-  const branchValue = $1('.branch-select-menu>summary>[data-menu-button]')?.textContent
 
-  return { owner, repo, commit, ref: (branchSelect === 'Branch:' && `refs/heads/${branchValue}`) || undefined }
+  const branchSelect = $1('[data-hotkey="w"]')
+  const ref =
+    branchSelect?.querySelector('i')?.textContent === 'Branch:'
+      ? `refs/heads/${branchSelect.getAttribute('title')}`
+      : undefined
+
+  return { owner, repo, commit, ref }
 }
 
 const auth = async (): Promise<Auth> => {
