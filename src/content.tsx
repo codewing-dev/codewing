@@ -1033,29 +1033,34 @@ type RepoCommitPath = Repo & { commit: string } & { path: string }
 type RepoCommitPathPosition = Repo & { commit: string } & { path: string } & Position
 type RepoCommitPathRange = Repo & { commit: string } & { path: string } & Range
 
-const onDiff = (jsDiffTable: HTMLElement, repoPath: RepoPath, commitSpec: CommitSpec): Subscribable<never> =>
+const onDiff = (
+  jsDiffTable: HTMLElement,
+  basePath: RepoPath,
+  headPath: RepoPath,
+  commitSpec: CommitSpec
+): Subscribable<never> =>
   new Observable(subscriber => {
-    const getBaseStencil = _.once(() => fetchStencil({ ...repoPath, commit: commitSpec.base }))
-    const getHeadStencil = _.once(() => fetchStencil({ ...repoPath, commit: commitSpec.head }))
+    const getBaseStencil = _.once(() => fetchStencil({ ...basePath, commit: commitSpec.base }))
+    const getHeadStencil = _.once(() => fetchStencil({ ...headPath, commit: commitSpec.head }))
     const { symbolAt } = mkSymbolAt()
     const pos2Range: OperatorFunction<PositionWithKind | undefined, RepoCommitPathRange | undefined> = observable =>
       observable.pipe(
         concatMap(async pos => {
           if (!pos) return undefined
-          const inject = async (stencil: Stencil, commit: string) => {
+          const inject = async (stencil: Stencil, commit: string, repoPath: RepoPath) => {
             const range = stencil.find(contains(pos))
             if (!range) return undefined
             return { ...repoPath, commit, ...range }
           }
           switch (pos.kind) {
             case 'addition':
-              return await inject(await getHeadStencil(), commitSpec.head)
+              return await inject(await getHeadStencil(), commitSpec.head, headPath)
             case 'deletion':
-              return await inject(await getBaseStencil(), commitSpec.base)
+              return await inject(await getBaseStencil(), commitSpec.base, basePath)
             case 'context':
-              return await inject(await getBaseStencil(), commitSpec.base)
+              return await inject(await getBaseStencil(), commitSpec.base, basePath)
             case 'normal':
-              return await inject(await getBaseStencil(), commitSpec.base)
+              return await inject(await getBaseStencil(), commitSpec.base, basePath)
             default:
               throw new Error('onDiff: unexpected kind')
           }
@@ -1069,10 +1074,10 @@ const onDiff = (jsDiffTable: HTMLElement, repoPath: RepoPath, commitSpec: Commit
     > = concatMap(async range => {
       if (!range) return undefined
       try {
-        return { sym: await symbolAt({ ...repoPath, ...range }), range }
+        return { sym: await symbolAt(range), range }
       } catch (e) {
         if (e.message === 'not-ready')
-          return { sym: { hover: 'CodeWyng is still processing...', references: [{ ...repoPath, ...range }] }, range }
+          return { sym: { hover: 'CodeWyng is still processing...', references: [range] }, range }
         else throw e
       }
     })
@@ -1113,7 +1118,7 @@ const onDiff = (jsDiffTable: HTMLElement, repoPath: RepoPath, commitSpec: Commit
         : _.compact([
             sym.sym.hover,
             sym.sym.definition &&
-              (sym.sym.definition.path === repoPath.path
+              (sym.sym.definition.path === sym.range.path
                 ? `Defined on line ${sym.sym.definition.line + 1}`
                 : `Defined in ${sym.sym.definition?.path}`),
           ]).join('\n\n---\n\n')
@@ -1122,7 +1127,7 @@ const onDiff = (jsDiffTable: HTMLElement, repoPath: RepoPath, commitSpec: Commit
         // TODO calling tippy() on multiple elements shows multiple tippys. Should only show 1.
         const hoverPieces = selectRange(currentBlobCodeInner, sym.range.characterStart, sym.range.characterEnd)
         const allPieces = symbolRanges(sym.sym).flatMap(range => {
-          if (range.path !== repoPath.path) return []
+          if (range.path !== sym.range.path) return []
           const x = findBlobCodeInner(range)
           if (!x) return []
           return selectRange(x, range.characterStart, range.characterEnd)
@@ -1229,8 +1234,11 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
       touch({ ...repo, commit: commitSpec.head, ref: `refs/pull/${prNumberAsString}/head` })
 
       return observeJsFilesUnder(elDiffView, elJsFile => {
-        const path = elJsFile.querySelector('.js-file-header')?.getAttribute('data-path')
-        if (path === undefined || path === null) return new Subscription()
+        // tslint:disable-next-line: prefer-const
+        let [basePath, headPath] =
+          elJsFile.querySelector('.js-file-header clipboard-copy')?.getAttribute('value')?.split(' → ') ?? []
+        if (basePath === undefined) return new Subscription()
+        if (headPath === undefined) headPath = basePath
 
         const loaded = elJsFile.querySelector('.js-blob-wrapper>.js-diff-table')
         const willload = elJsFile.querySelector('.js-diff-load-container')
@@ -1246,7 +1254,11 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
                 })
               )
         )
-          .pipe(switchMap(jsDiffTable => onDiff(jsDiffTable, { ...repo, path }, commitSpec)))
+          .pipe(
+            switchMap(jsDiffTable =>
+              onDiff(jsDiffTable, { ...repo, path: basePath }, { ...repo, path: headPath }, commitSpec)
+            )
+          )
           .subscribe()
       })
     default:
