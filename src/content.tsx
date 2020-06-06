@@ -591,10 +591,12 @@ const determineCommit = (): { owner: string; repo: string; commit: string; ref?:
   const [_ignore, owner, repo, _treeOrBlob, commit] = permalinkHref.split('/')
 
   const branchSelect = $1('[data-hotkey="w"]')
-  const ref =
-    branchSelect?.querySelector('i')?.textContent === 'Branch:'
-      ? `refs/heads/${branchSelect.getAttribute('title')}`
-      : undefined
+  const onBranch = branchSelect?.querySelector('i')?.textContent === 'Branch:'
+  const title = branchSelect?.getAttribute('title')
+  const buttonText = branchSelect?.querySelector('[data-menu-button]')?.textContent ?? undefined
+  let ref: string | undefined
+  if (onBranch && title === 'Switch branches or tags') ref = `refs/heads/${buttonText}`
+  if (onBranch && title !== 'Switch branches or tags') ref = `refs/heads/${title}`
 
   return { owner, repo, commit, ref }
 }
