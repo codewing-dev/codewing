@@ -1033,17 +1033,29 @@ type RepoCommitPath = Repo & { commit: string } & { path: string }
 type RepoCommitPathPosition = Repo & { commit: string } & { path: string } & Position
 type RepoCommitPathRange = Repo & { commit: string } & { path: string } & Range
 
+const findCommitLineNum = (
+  diffAnchor: string,
+  commitSpec: CommitSpec,
+  commit: string,
+  line: number
+): HTMLElement | undefined => {
+  const side = commit === commitSpec.base ? 'L' : 'R'
+  return $1(`#${diffAnchor}${side}${line + 1}`)
+}
+
 const onDiff = (
   jsDiffTable: HTMLElement,
   basePath: RepoPath,
   headPath: RepoPath,
-  commitSpec: CommitSpec
+  commitSpec: CommitSpec,
+  j2d: (range: RepoCommitPathRange) => void
 ): Subscribable<never> =>
   new Observable(subscriber => {
     const getBaseStencil = _.once(() => fetchStencil({ ...basePath, commit: commitSpec.base }))
     const getHeadStencil = _.once(() => fetchStencil({ ...headPath, commit: commitSpec.head }))
     const { symbolAt } = mkSymbolAt()
     const diffAnchor = jsDiffTable.getAttribute('data-diff-anchor')
+    if (!diffAnchor) return new Subscription()
     const pos2Range: OperatorFunction<PositionWithKind | undefined, RepoCommitPathRange | undefined> = observable =>
       observable.pipe(
         concatMap(async pos => {
@@ -1086,14 +1098,11 @@ const onDiff = (
     const showTippy = (sym: { sym: Sym; range: RepoCommitPathRange } | undefined): Subscribable<never> => {
       if (!sym) return EMPTY
 
-      const findCommitLineNum = (commit: string, line: number): HTMLElement | undefined => {
-        const side = commit === commitSpec.base ? 'L' : 'R'
-        return jsDiffTable.querySelector<HTMLElement>(`#${diffAnchor}${side}${line + 1}`) ?? undefined
-      }
-
       const findBlobCodeInner = (range: RepoCommitPathRange): HTMLElement | undefined => {
         return (
-          findCommitLineNum(range.commit, range.line)?.parentElement?.querySelector('.blob-code-inner') ?? undefined
+          findCommitLineNum(diffAnchor, commitSpec, range.commit, range.line)?.parentElement?.querySelector(
+            '.blob-code-inner'
+          ) ?? undefined
         )
       }
 
@@ -1139,24 +1148,12 @@ const onDiff = (
         s.add(() => ts.forEach(t => t.destroy()))
         const def = sym.sym.definition
         if (def && !isDefinition) {
-          const j2d = () => {
-            const openInNewTab = () =>
-              window.open(
-                `https://github.com/${def.owner}/${def.repo}/blob/${def.commit}/${def.path}#L${def.line + 1}`,
-                '_newtab'
-              )
-            if (def.owner !== basePath.owner || def.repo !== basePath.repo || def.path !== basePath.path)
-              return openInNewTab()
-            const lineNum = findCommitLineNum(def.commit, def.line)
-            const blobCode = lineNum?.parentElement?.querySelector<HTMLElement>('.blob-code')
-            if (!lineNum || !blobCode) return openInNewTab()
-            senpai(lineNum, blobCode, 'center')
-          }
+          const onClick = () => j2d(def)
           hoverPieces.forEach(piece => {
             piece.classList.add('codewyng-clickable')
-            piece.addEventListener('click', j2d)
+            piece.addEventListener('click', onClick)
             s.add(() => {
-              piece.removeEventListener('click', j2d)
+              piece.removeEventListener('click', onClick)
               piece.classList.remove('codewyng-clickable')
             })
           })
@@ -1236,7 +1233,21 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
       // tslint:disable-next-line: no-floating-promises
       touch({ ...repo, commit: commitSpec.head, ref: `refs/pull/${prNumberAsString}/head` })
 
-      // TODO emit the jsFiles as HTMLElements, store in a Map<File, HTMLElement>
+      const path2Anchor = new Map<string, string>()
+      const j2d = (range: RepoCommitPathRange) => {
+        const openInNewTab = () =>
+          window.open(
+            `https://github.com/${range.owner}/${range.repo}/blob/${range.commit}/${range.path}#L${range.line + 1}`,
+            '_newtab'
+          )
+        const anchor = path2Anchor.get(stringify(_.pick(range, 'owner', 'repo', 'path')))
+        if (!anchor) return openInNewTab()
+        const lineNum = findCommitLineNum(anchor, commitSpec, range.commit, range.line)
+        const blobCode = lineNum?.parentElement?.querySelector<HTMLElement>('.blob-code')
+        if (!lineNum || !blobCode) return openInNewTab()
+        senpai(lineNum, blobCode, 'center')
+      }
+
       return observeJsFilesUnder(elDiffView, elJsFile => {
         // tslint:disable-next-line: prefer-const
         let [basePath, headPath] =
@@ -1259,8 +1270,14 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
               )
         )
           .pipe(
+            tap(jsDiffTable => {
+              const anchor = jsDiffTable.getAttribute('data-diff-anchor')
+              if (!anchor) return
+              path2Anchor.set(stringify(_.pick({ ...repo, path: basePath }, 'owner', 'repo', 'path')), anchor)
+              path2Anchor.set(stringify(_.pick({ ...repo, path: headPath }, 'owner', 'repo', 'path')), anchor)
+            }),
             switchMap(jsDiffTable =>
-              onDiff(jsDiffTable, { ...repo, path: basePath }, { ...repo, path: headPath }, commitSpec)
+              onDiff(jsDiffTable, { ...repo, path: basePath }, { ...repo, path: headPath }, commitSpec, j2d)
             )
           )
           .subscribe()
