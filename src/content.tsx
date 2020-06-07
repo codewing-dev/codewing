@@ -406,24 +406,24 @@ function bind<T, U>(f: (t: T) => U): (mt: T | undefined) => U | undefined {
   return mt => (mt === undefined ? undefined : f(mt))
 }
 
-const senpai = (line: HTMLElement) => {
-  line.classList.add('senpai')
-  line.scrollIntoView({
+const senpai = (scrollEl: HTMLElement, highlightEl: HTMLElement, kind: 'center' | 'nearest') => {
+  highlightEl.classList.add('senpai')
+  scrollEl.scrollIntoView({
     behavior: 'smooth', // auto/smooth
-    block: 'nearest',
+    block: kind,
   })
   const intersectionObserver = new IntersectionObserver(isectentries => {
     const [entry] = isectentries
     if (entry.isIntersecting) {
-      line.classList.add('senpai2')
-      line.classList.remove('senpai')
+      highlightEl.classList.add('senpai2')
+      highlightEl.classList.remove('senpai')
       setTimeout(() => {
-        line.classList.remove('senpai2')
+        highlightEl.classList.remove('senpai2')
       }, 2000)
     }
   })
   // start observing
-  intersectionObserver.observe(line)
+  intersectionObserver.observe(scrollEl)
 }
 
 let refpanel: { symbol: Sym; el: HTMLElement } | undefined
@@ -474,7 +474,7 @@ const showRefPanel = (lines: HTMLElement[], symbol: Sym, e: MouseEvent) => {
       const reftr = lineTr.cloneNode(true) as HTMLElement
       reftr.style.cursor = 'pointer'
       reftr.addEventListener('click', refClickEvent => {
-        senpai(lineTr)
+        senpai(lineTr, lineTr, 'nearest')
       })
       reftr.querySelectorAll('span').forEach(span => {
         span.classList.remove('codewyng-clickable')
@@ -547,7 +547,7 @@ function setUpClickHandler(
               window.open(destination.href, '_newtab')
             } else {
               const line = lines[symbol.definition.line]
-              senpai(line.closest('tr')!)
+              senpai(line.closest('tr')!, line.closest('tr')!, 'nearest')
             }
           }
         }
@@ -1043,6 +1043,7 @@ const onDiff = (
     const getBaseStencil = _.once(() => fetchStencil({ ...basePath, commit: commitSpec.base }))
     const getHeadStencil = _.once(() => fetchStencil({ ...headPath, commit: commitSpec.head }))
     const { symbolAt } = mkSymbolAt()
+    const diffAnchor = jsDiffTable.getAttribute('data-diff-anchor')
     const pos2Range: OperatorFunction<PositionWithKind | undefined, RepoCommitPathRange | undefined> = observable =>
       observable.pipe(
         concatMap(async pos => {
@@ -1085,19 +1086,14 @@ const onDiff = (
     const showTippy = (sym: { sym: Sym; range: RepoCommitPathRange } | undefined): Subscribable<never> => {
       if (!sym) return EMPTY
 
-      const commit2BlobNumSelector = (commit: string): string => {
-        if (commit === commitSpec.base) {
-          return '.blob-num:nth-child(1)'
-        } else {
-          return '.blob-num-addition'
-        }
+      const findCommitLineNum = (commit: string, line: number): HTMLElement | undefined => {
+        const side = commit === commitSpec.base ? 'L' : 'R'
+        return jsDiffTable.querySelector<HTMLElement>(`#${diffAnchor}${side}${line + 1}`) ?? undefined
       }
 
       const findBlobCodeInner = (range: RepoCommitPathRange): HTMLElement | undefined => {
         return (
-          jsDiffTable
-            .querySelector(`${commit2BlobNumSelector(range.commit)}[data-line-number="${range.line + 1}"]`)
-            ?.parentElement?.querySelector('.blob-code-inner') ?? undefined
+          findCommitLineNum(range.commit, range.line)?.parentElement?.querySelector('.blob-code-inner') ?? undefined
         )
       }
 
@@ -1143,17 +1139,24 @@ const onDiff = (
         s.add(() => ts.forEach(t => t.destroy()))
         const def = sym.sym.definition
         if (def && !isDefinition) {
+          const j2d = () => {
+            const openInNewTab = () =>
+              window.open(
+                `https://github.com/${def.owner}/${def.repo}/blob/${def.commit}/${def.path}#L${def.line + 1}`,
+                '_newtab'
+              )
+            if (def.owner !== basePath.owner || def.repo !== basePath.repo || def.path !== basePath.path)
+              return openInNewTab()
+            const lineNum = findCommitLineNum(def.commit, def.line)
+            const blobCode = lineNum?.parentElement?.querySelector<HTMLElement>('.blob-code')
+            if (!lineNum || !blobCode) return openInNewTab()
+            senpai(lineNum, blobCode, 'center')
+          }
           hoverPieces.forEach(piece => {
             piece.classList.add('codewyng-clickable')
-            const listener = () => {
-              const destination = `https://github.com/${def.owner}/${def.repo}/blob/${def.commit}/${def.path}#L${
-                def.line + 1
-              }`
-              window.open(destination, '_newtab')
-            }
-            piece.addEventListener('click', listener)
+            piece.addEventListener('click', j2d)
             s.add(() => {
-              piece.removeEventListener('click', listener)
+              piece.removeEventListener('click', j2d)
               piece.classList.remove('codewyng-clickable')
             })
           })
@@ -1233,6 +1236,7 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
       // tslint:disable-next-line: no-floating-promises
       touch({ ...repo, commit: commitSpec.head, ref: `refs/pull/${prNumberAsString}/head` })
 
+      // TODO emit the jsFiles as HTMLElements, store in a Map<File, HTMLElement>
       return observeJsFilesUnder(elDiffView, elJsFile => {
         // tslint:disable-next-line: prefer-const
         let [basePath, headPath] =
