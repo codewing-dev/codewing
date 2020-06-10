@@ -81,6 +81,8 @@ import Highlighter from 'react-highlight-words'
 import ReactMarkdown from 'react-markdown'
 import _ from 'lodash'
 
+import { useEventCallback } from 'rxjs-hooks'
+
 function textWidth(text: string, font: string) {
   const element = document.createElement('canvas')
   const context = element.getContext('2d')
@@ -743,8 +745,11 @@ const tippystyleprops: Partial<Props> = {
 
 const Search: React.FC = () => {
   const [shown, setShown] = useState(false)
+
+  useHotkeys('cmd+/', () => setShown(true))
+
   const [rtt, setRTT] = useState<number | undefined>(undefined)
-  const [query, setQuery] = useState('')
+
   type Result = {
     owner: string
     repo: string
@@ -754,22 +759,33 @@ const Search: React.FC = () => {
     lineno: number
     matches: any[]
   }
-  const [results, setResults] = useState<Result[] | 'not-ready' | 'init'>('init')
-  useHotkeys('cmd+/', () => setShown(true))
-  const search = async () => {
+
+  const search = async (query: string) => {
     if (query === '') {
-      setResults('init')
+      return 'init'
     } else {
       const start = new Date().getTime()
-      setResults(
-        await browser.runtime.sendMessage({
-          kind: 'serverCall',
-          args: { kind: 'query', ...determineCommit(), query },
-        })
-      )
+      const res = await browser.runtime.sendMessage({
+        kind: 'serverCall',
+        args: { kind: 'query', ...determineCommit(), query },
+      })
+
       setRTT(new Date().getTime() - start)
+      return res
     }
   }
+  const [event, results] = useEventCallback<
+    React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>,
+    Result[] | 'not-ready' | 'init'
+  >(
+    events =>
+      events.pipe(
+        map(e => e.target.value),
+        debounceTime(500),
+        switchMap(value => search(value))
+      ),
+    'init'
+  )
 
   const groupResults = (
     rs: Result[]
@@ -798,18 +814,7 @@ const Search: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
             <SearchIcon />
-            <Input
-              autoFocus
-              style={{ width: '600px' }}
-              placeholder="Search..."
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={async e => {
-                if (e.key === 'Enter') {
-                  await search()
-                }
-              }}
-            />
+            <Input autoFocus style={{ width: '600px' }} placeholder="Search..." onChange={event} />
           </div>
           {rtt && <div>({rtt} ms)</div>}
         </div>
