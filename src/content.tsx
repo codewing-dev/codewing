@@ -32,6 +32,7 @@ import {
   ignoreElements,
   expand,
   scan,
+  catchError,
 } from 'rxjs/operators'
 import { isEqual, once, uniq, compact, noop, groupBy, entries, mapValues, orderBy } from 'lodash'
 import tippy, { Props, Tippy, createSingleton, Instance } from 'tippy.js'
@@ -119,13 +120,19 @@ function findHoverCharacter({
 
 type PositionWithKind = Position & { kind: LineSpec['kind'] }
 
+// TODO see if you can return the actual commit here instead of kind, could enable you to split findLineNumber into 3 functions (diff/blame/normal)
 function positions(): OperatorFunction<MouseEvent, PositionWithKind | undefined> {
-  const constants = once(a => {
-    const { paddingLeft, font } = window.getComputedStyle(a, null)
+  const constants = once((blobCodeInner: HTMLElement) => {
+    const { paddingLeft, font } = window.getComputedStyle(blobCodeInner, null)
+    const tabSizeString = blobCodeInner.closest('[data-tab-size]')?.getAttribute('data-tab-size')
+    if (!tabSizeString) {
+      console.warn('positions: unable to determine tab size')
+      return undefined
+    }
     return {
       paddingLeft: parseFloat(paddingLeft),
       characterWidth: textWidth('x', font),
-      tabSize: parseInt(a.closest('table').getAttribute('data-tab-size')),
+      tabSize: parseInt(tabSizeString),
     }
   })
 
@@ -141,7 +148,9 @@ function positions(): OperatorFunction<MouseEvent, PositionWithKind | undefined>
       return
     }
 
-    const { characterWidth, tabSize } = constants(blobCodeInner)
+    const computedConstants = constants(blobCodeInner)
+    if (!computedConstants) return undefined
+    const { characterWidth, tabSize } = computedConstants
     const text = textContent(blobCodeInner)
     const leftEl = text.startsWith('\t') ? blobCodeInner : firstEl
     const contentX =
@@ -228,7 +237,7 @@ function nodeAtChar<T extends Node | HTMLElement>(nodes: Iterable<T>, char: numb
 }
 
 function selectRange(blobCodeInner: HTMLElement, start: number, end: number): HTMLElement[] {
-  spannify2(blobCodeInner)
+  spannify(blobCodeInner)
   splitAt(blobCodeInner, start)
   splitAt(blobCodeInner, end)
   const nodes: HTMLElement[] = []
@@ -249,7 +258,15 @@ declare let currentTippys: Instance[]
 type LineSpec = { line: number; kind: 'normal' | 'context' | 'addition' | 'deletion' }
 const findLineNumber = (blobCodeInner: HTMLElement): LineSpec | undefined => {
   const tr = blobCodeInner.closest('tr')
-  if (!tr) return
+  if (!tr) {
+    // probably a blame view
+    const lineString = blobCodeInner.getAttribute('id')
+    if (!lineString) return undefined
+    return {
+      line: parseInt(lineString.slice(2)) - 1,
+      kind: 'normal',
+    }
+  }
 
   const resolve = (kind: LineSpec['kind'], blobNum: HTMLElement | null): LineSpec | undefined => {
     if (!blobNum) return undefined
@@ -275,52 +292,6 @@ const findLineNumber = (blobCodeInner: HTMLElement): LineSpec | undefined => {
 
 const wordRegex = /[a-zA-Z_][a-zA-Z0-9_]*/g
 
-function applySymbol(file: RepoCommitPath, arg: { sym: Sym | undefined; range: Range } | undefined): void {
-  $n('.codewyng-highlighted').forEach(e => e.classList.remove('codewyng-highlighted'))
-  currentTippys.forEach(t => t.destroy())
-  currentTippys = []
-  if (!arg || !arg.sym) return
-
-  const { sym, range: hoveredRange } = arg
-
-  const ranges = symbolRanges(sym).filter(range => range.path === file.path)
-  if (ranges.length > 1000) {
-    console.warn(`too many ranges to highlight (${ranges.length})`)
-    return
-  }
-
-  const hoveredTippys: Instance[] = []
-  for (const range of ranges) {
-    const jsFileLine = $1(`[data-line-number="${range.line + 1}"]`)?.nextElementSibling as HTMLElement | undefined
-    if (!jsFileLine) continue
-
-    const isDefinition = isEqual(range, sym.definition)
-    const hover = isDefinition
-      ? 'Click to find references.'
-      : _.compact([
-          sym.hover,
-          sym.definition &&
-            (sym.definition.path === file.path
-              ? `Defined on line ${sym.definition.line + 1}`
-              : `Defined in ${sym.definition?.path}`),
-        ]).join('\n\n---\n\n')
-
-    const pieces = selectRange(jsFileLine, range.characterStart, range.characterEnd)
-    const to = tippy(pieces, {
-      ...tippystyleprops,
-      content: `<div style="overflow: hidden;">${md.render(hover)}</div>`,
-    } as any)
-    currentTippys.push(...to)
-
-    if (isEqual(_.pick(range, ['line', 'characterStart', 'characterEnd']), hoveredRange)) {
-      for (const piece of pieces) piece.classList.add('codewyng-highlighted')
-      hoveredTippys.push(...to)
-    }
-  }
-
-  hoveredTippys.forEach(t => t.show())
-}
-
 function initCSS() {
   const style = document.createElement('style')
   document.head.appendChild(style)
@@ -336,7 +307,6 @@ function initCSS() {
 
   // !important so it shows up even on word diffs.
   sheet.insertRule('.codewyng-highlighted { background-color: rgba(255, 179, 109, 0.5) !important }')
-  sheet.insertRule('.refpanel:hover { background-color: white }')
   // const rule = sheet.cssRules[0] as CSSStyleRule
   // rule.style.backgroundColor = hlColor
   // rule.style.transition = 'background-color 0ms linear'
@@ -427,138 +397,6 @@ const senpai = (scrollEl: HTMLElement, highlightEl: HTMLElement, kind: 'center' 
   })
   // start observing
   intersectionObserver.observe(scrollEl)
-}
-
-let refpanel: { symbol: Sym; el: HTMLElement } | undefined
-
-const dismissRefpanel = () => {
-  if (refpanel) {
-    refpanel.el.remove()
-    refpanel = undefined
-  }
-}
-
-const showRefPanel = (lines: HTMLElement[], symbol: Sym, e: MouseEvent) => {
-  const oldSymbol = refpanel?.symbol
-  dismissRefpanel()
-  if (isEqual(oldSymbol, symbol)) {
-    return
-  }
-
-  const target = e.target as HTMLElement
-  // target
-  //   .closest('tr')
-  //   .insertAdjacentHTML(
-  //     'afterend',
-  //     '<tr><td colspan="2"><div style="height: 100px; background-color: khaki;"></div></td></tr>'
-  //   )
-  const tr = target.closest('tr')
-  if (!tr) throw new Error('no tr for target')
-  const div = document.createElement('div')
-  div.style.maxHeight = '200px'
-  div.style.overflow = 'auto'
-  div.style.backgroundColor = '#fafbfc'
-
-  div.style.boxSizing = 'border-box'
-  div.style.borderTop = 'rgba(0,0,0,0.5) solid 1px'
-  div.style.borderBottom = 'rgba(0,0,0,0.5) solid 1px'
-  const label = document.createElement('div')
-  label.style.color = 'gray'
-  label.appendChild(document.createTextNode(`${symbol.references.length} References`))
-  label.style.borderBottom = 'rgba(0,0,0,0.5) solid 1px'
-  div.append(label)
-  const table = document.createElement('table')
-  table.style.width = '100%'
-  div.append(table)
-  table.append(
-    ...symbol.references.map(r => {
-      const lineTr = lines[r.line].closest('tr')
-      if (!lineTr) throw new Error(`line ${r.line} has no ancestor <tr>`)
-      const reftr = lineTr.cloneNode(true) as HTMLElement
-      reftr.style.cursor = 'pointer'
-      reftr.addEventListener('click', refClickEvent => {
-        senpai(lineTr, lineTr, 'nearest')
-      })
-      reftr.querySelectorAll('span').forEach(span => {
-        span.classList.remove('codewyng-clickable')
-        // span.classList.remove('codewyng')
-      })
-      // this will probably get cleaned up while working more on the ref panel
-      reftr.querySelector('td:nth-child(2)')!.classList.add('refpanel')
-      return reftr
-    })
-  )
-  const td = document.createElement('td')
-  td.setAttribute('colspan', '2')
-  td.appendChild(div)
-  const panel = document.createElement('tr')
-  panel.appendChild(td)
-  if (tr.nextElementSibling === null) {
-    tr.parentElement!.append(panel)
-  } else {
-    tr.parentElement!.insertBefore(panel, tr.nextElementSibling)
-  }
-  refpanel = { symbol, el: td }
-}
-
-function setUpClickHandler(
-  file: RepoCommitPath,
-  piece: HTMLElement,
-  symbol: Sym,
-  kind: 'definition' | 'reference'
-): void {
-  // piece.style.backgroundColor = 'yellow'
-  piece.classList.add('codewyng-clickable')
-  const lines = $n('.js-file-line:not(.refpanel)')
-  piece.addEventListener('click', e => {
-    switch (kind) {
-      case 'definition':
-        showRefPanel(lines, symbol, e)
-        break
-      case 'reference':
-        if (!symbol.definition) {
-          showRefPanel(lines, symbol, e)
-        } else {
-          // j2d
-
-          // IF SETTINGS.USEPUSHTATE
-          // const curline =
-          //   parseInt(
-          //     (e.target as HTMLElement)
-          //       .closest('.blob-code')
-          //       .parentElement.querySelector('.blob-num')
-          //       .getAttribute('data-line-number')
-          //   ) - 1
-          // window.history.pushState(null, null, '#L' + (curline + 1))
-          // window.history.pushState(null, null, '#L' + symbol.definition.line)
-
-          if (symbol.definition.path !== file.path) {
-            const d = symbol.definition
-            // CROSS-FILE
-            const destination = `https://github.com/${d.owner}/${d.repo}/blob/${d.commit}/${d.path}#L${d.line + 1}`
-            if (e.metaKey || e.ctrlKey) {
-              window.open(destination, '_newtab')
-            } else {
-              window.location.href = destination
-            }
-            return
-          } else {
-            // SAME-FILE
-            const destination = new URL(window.location.href)
-            destination.hash = `#L${symbol.definition.line + 1}`
-            if (e.metaKey || e.ctrlKey) {
-              window.open(destination.href, '_newtab')
-            } else {
-              const line = lines[symbol.definition.line]
-              senpai(line.closest('tr')!, line.closest('tr')!, 'nearest')
-            }
-          }
-        }
-        break
-      default:
-        throw new Error('impossible')
-    }
-  })
 }
 
 const determineFile = (): RepoCommitPath => {
@@ -653,54 +491,7 @@ const mkSymbolAt = (): {
   }
 }
 
-const findRange = (ranges: Range[]) => (position: Position): Range | undefined =>
-  ranges.find(range => contains(position)(range))
-
-function onSymbol(file: RepoCommitPath, symbol: Sym): void {
-  const lines = $n('.js-file-line:not(.refpanel)')
-
-  // spannify
-  const iscrossfiledef = (s: Sym) => s.definition?.path !== file.path
-  uniq<number>([
-    ...(symbol.definition && !iscrossfiledef(symbol) ? [symbol.definition.line] : []),
-    ...symbol.references.map(reference => reference.line),
-  ]).forEach(spannify)
-
-  function applydef(definition: Range): void {
-    for (const piece of selectRange(lines[definition.line], definition.characterStart, definition.characterEnd)) {
-      setUpClickHandler(file, piece, symbol, 'definition')
-    }
-  }
-
-  function applyref(references: Range[]): void {
-    for (const reference of references) {
-      for (const piece of selectRange(lines[reference.line], reference.characterStart, reference.characterEnd)) {
-        setUpClickHandler(file, piece, symbol, 'reference')
-      }
-    }
-  }
-
-  if (symbol.definition && !iscrossfiledef(symbol)) applydef(symbol.definition)
-  applyref(symbol.references)
-}
-
-const spannified = new Set()
-
-function spannify(line: number): void {
-  if (spannified.has(line)) {
-    return
-  }
-  for (const child of Array.from($n('.js-file-line:not(.refpanel)')[line].childNodes)) {
-    if (child.nodeType === Node.TEXT_NODE) {
-      const span = document.createElement('span')
-      span.appendChild(document.createTextNode(textContent(child)))
-      child.parentElement!.replaceChild(span, child)
-    }
-  }
-  spannified.add(line)
-}
-
-function spannify2(blobCodeInner: HTMLElement): void {
+function spannify(blobCodeInner: HTMLElement): void {
   for (const child of Array.from(blobCodeInner.childNodes)) {
     if (child.nodeType === Node.TEXT_NODE) {
       const span = document.createElement('span')
@@ -938,6 +729,13 @@ const notReadySearchHelp = `
 Try running your search again in a few seconds.
 `
 
+const openInNewTab = (range: RepoCommitPathRange): void => {
+  window.open(
+    `https://github.com/${range.owner}/${range.repo}/blob/${range.commit}/${range.path}#L${range.line + 1}`,
+    '_newtab'
+  )
+}
+
 const onDiffView = (commitSpec: CommitSpec, repo: Repo) => {
   // tslint:disable-next-line: no-floating-promises
   touch({ ...repo, commit: commitSpec.base, ref: commitSpec.ref })
@@ -966,16 +764,11 @@ const onDiffView = (commitSpec: CommitSpec, repo: Repo) => {
 
   const path2Anchor = new Map<string, string>()
   const j2d = (range: RepoCommitPathRange) => {
-    const openInNewTab = () =>
-      window.open(
-        `https://github.com/${range.owner}/${range.repo}/blob/${range.commit}/${range.path}#L${range.line + 1}`,
-        '_newtab'
-      )
     const anchor = path2Anchor.get(stringify(_.pick(range, 'owner', 'repo', 'path')))
-    if (!anchor) return openInNewTab()
+    if (!anchor) return openInNewTab(range)
     const lineNum = findCommitLineNum(anchor, commitSpec, range.commit, range.line)
     const blobCode = lineNum?.parentElement?.querySelector<HTMLElement>('.blob-code')
-    if (!lineNum || !blobCode) return openInNewTab()
+    if (!lineNum || !blobCode) return openInNewTab(range)
     senpai(lineNum, blobCode, 'center')
   }
 
@@ -1013,60 +806,6 @@ const onDiffView = (commitSpec: CommitSpec, repo: Repo) => {
       )
       .subscribe()
   })
-}
-
-const oldOnBlobPage = async () => {
-  const selector = '.js-file-line-container'
-  const fileContainer = $1(selector)
-  if (!fileContainer) {
-    console.log(`could not find ${selector} at ${window.location} TODO figure out why this happens`)
-    return
-  }
-
-  const file = determineFile()
-
-  let stencil: Stencil | undefined
-  try {
-    stencil = await fetchStencil(determineFile())
-  } catch (e) {
-    if (e.message === 'unsupported-language') {
-      console.log('unsupported language')
-      return
-    } else {
-      throw e
-    }
-  }
-
-  const { symbolAt, symbols } = mkSymbolAt()
-
-  symbols.subscribe(sym => onSymbol(file, sym))
-
-  merge(fromEvent(fileContainer, 'mousemove').pipe(debounceTime(80), positions(), map(bind(findRange(stencil)))))
-    .pipe(
-      uniqueBy(arg => arg),
-      switchMap(async range => {
-        if (!range) return undefined
-        try {
-          return { sym: await symbolAt({ ...file, ...range }), range }
-        } catch (e) {
-          if (e.message === 'not-ready')
-            return { sym: { hover: 'CodeWyng is still processing...', references: [{ ...file, ...range }] }, range }
-          else throw e
-        }
-      })
-    )
-    .subscribe(sym => applySymbol(file, sym))
-
-  fromEvent(fileContainer, 'click')
-    .pipe(
-      positions(),
-      filter(x => x === undefined)
-    )
-    .subscribe(() => {
-      dismissRefpanel()
-    })
-
-  disableGitHubNative()
 }
 
 const touch = async (args: RepoCommit & { ref?: string }): Promise<void> =>
@@ -1139,6 +878,23 @@ const findCommitLineNum = (
   return $1(`#${diffAnchor}${side}${line + 1}`)
 }
 
+const range2Symbol = (
+  symbolAt: (range: RepoCommitPathRange) => Promise<Sym | undefined>
+): OperatorFunction<
+  RepoCommitPathRange | undefined,
+  { sym: Sym | undefined; range: RepoCommitPathRange } | undefined
+> =>
+  concatMap(async range => {
+    if (!range) return undefined
+    try {
+      return { sym: await symbolAt(range), range }
+    } catch (e) {
+      if (e.message === 'not-ready')
+        return { sym: { hover: 'CodeWyng is still processing...', references: [range] }, range }
+      else throw e
+    }
+  })
+
 const onDiff = (
   jsDiffTable: HTMLElement,
   basePath: RepoPath,
@@ -1177,95 +933,22 @@ const onDiff = (
         unique()
       )
 
-    const range2Symbol: OperatorFunction<
-      RepoCommitPathRange | undefined,
-      { sym: Sym | undefined; range: RepoCommitPathRange } | undefined
-    > = concatMap(async range => {
-      if (!range) return undefined
-      try {
-        return { sym: await symbolAt(range), range }
-      } catch (e) {
-        if (e.message === 'not-ready')
-          return { sym: { hover: 'CodeWyng is still processing...', references: [range] }, range }
-        else throw e
-      }
-    })
-
-    const showTippy = (sym: { sym: Sym; range: RepoCommitPathRange } | undefined): Subscribable<never> => {
-      if (!sym) return EMPTY
-
-      const findBlobCodeInner = (range: RepoCommitPathRange): HTMLElement | undefined => {
-        return (
-          findCommitLineNum(diffAnchor, commitSpec, range.commit, range.line)?.parentElement?.querySelector(
-            '.blob-code-inner'
-          ) ?? undefined
-        )
-      }
-
-      const currentBlobCodeInner = findBlobCodeInner(sym.range)
-      if (!currentBlobCodeInner || !(currentBlobCodeInner instanceof HTMLElement)) {
-        console.warn('showTippy: expected blobCodeInner')
-        return EMPTY
-      }
-
-      const pickRepoCommitPathRange = (range: RepoCommitPathRange): RepoCommitPathRange =>
-        _.pick(range, ['owner', 'repo', 'commit', 'path', 'line', 'characterStart', 'characterEnd'])
-
-      const isDefinition = sym.sym.definition
-        ? isEqual(pickRepoCommitPathRange(sym.range), pickRepoCommitPathRange(sym.sym.definition))
-        : false
-      const hover = isDefinition
-        ? sym.sym.hover ?? 'Defined here.'
-        : _.compact([
-            sym.sym.hover,
-            sym.sym.definition &&
-              (sym.sym.definition.path === sym.range.path
-                ? `Defined on line ${sym.sym.definition.line + 1}`
-                : `Defined in ${sym.sym.definition?.path}`),
-          ]).join('\n\n---\n\n')
-      return new Observable(_subscriber => {
-        const s = new Subscription()
-        // TODO calling tippy() on multiple elements shows multiple tippys. Should only show 1.
-        const hoverPieces = selectRange(currentBlobCodeInner, sym.range.characterStart, sym.range.characterEnd)
-        const allPieces = symbolRanges(sym.sym).flatMap(range => {
-          if (range.path !== sym.range.path) return []
-          const x = findBlobCodeInner(range)
-          if (!x) return []
-          return selectRange(x, range.characterStart, range.characterEnd)
-        })
-        const ts = tippy(hoverPieces, {
-          ...tippystyleprops,
-          showOnCreate: true,
-          onShow: () => allPieces.forEach(piece => piece.classList.add('codewyng-highlighted')),
-          onHide: () => allPieces.forEach(piece => piece.classList.remove('codewyng-highlighted')),
-          onDestroy: () => allPieces.forEach(piece => piece.classList.remove('codewyng-highlighted')),
-          content: `<div style="overflow: hidden;">${md.render(hover)}</div>`,
-        })
-        s.add(() => ts.forEach(t => t.destroy()))
-        const def = sym.sym.definition
-        if (def && !isDefinition) {
-          const onClick = () => j2d(def)
-          hoverPieces.forEach(piece => {
-            piece.classList.add('codewyng-clickable')
-            piece.addEventListener('click', onClick)
-            s.add(() => {
-              piece.removeEventListener('click', onClick)
-              piece.classList.remove('codewyng-clickable')
-            })
-          })
-        }
-
-        return s
-      })
+    const findBlobCodeInner = (range: RepoCommitPathRange): HTMLElement | undefined => {
+      return (
+        findCommitLineNum(diffAnchor, commitSpec, range.commit, range.line)?.parentElement?.querySelector(
+          '.blob-code-inner'
+        ) ?? undefined
+      )
     }
 
+    // TODO factor this out and reuse it for blob/blame views
     return merge(
       fromEvent(jsDiffTable, 'mousemove').pipe(
         debounceTime(80),
         positions(),
         pos2Range,
-        range2Symbol,
-        switchMap(showTippy),
+        range2Symbol(symbolAt),
+        switchMap(showTippy(findBlobCodeInner, j2d)),
         ignoreElements()
       )
     ).subscribe(subscriber)
@@ -1292,10 +975,133 @@ const observeNewChildren = (target: Node): Observable<HTMLElement> => {
   )
 }
 
-const onBlobPage = (): Subscribable<never> => {
-  // tslint:disable-next-line: no-floating-promises
-  oldOnBlobPage()
-  return EMPTY
+const onBlobOrBlame = (pathComponents: string[], repo: Repo): Subscribable<never> => {
+  disableGitHubNative()
+
+  const [rev, ...pathPieces] = pathComponents
+  const path = pathPieces.join('/')
+  const ref = rev.length === 40 && /^[0-9a-f]+$/.test(rev) ? undefined : rev
+  const { commit } = determineFile()
+
+  const jsFileLineContainer = $1('.js-file-line-container')
+  if (!jsFileLineContainer) {
+    console.log(`could not find .js-file-line-container TODO figure out why this happens`)
+    return EMPTY
+  }
+
+  // TODO see if you can make one of these and/or add it to a Subscription
+  const { symbolAt } = mkSymbolAt()
+
+  const j2d = (range: RepoCommitPathRange) => {
+    if (!isEqual({ ...repo, commit, path }, _.pick(range, ['owner', 'repo', 'commit', 'path'])))
+      return openInNewTab(range)
+    const lineNum = $1(`[data-line-number="${range.line + 1}"]`) ?? $1(`#L${range.line + 1}`)
+    const blobCode = lineNum?.parentElement?.querySelector<HTMLElement>('.blob-code')
+    if (!lineNum || !blobCode) return openInNewTab(range)
+    senpai(lineNum, blobCode, 'nearest')
+  }
+
+  return from(fetchStencil({ ...repo, commit, path })).pipe(
+    catchError(() => of(undefined)),
+    switchMap(stencil => {
+      if (!stencil) return EMPTY
+      return new Observable<never>(subscriber => {
+        const pos2Range: OperatorFunction<PositionWithKind | undefined, RepoCommitPathRange | undefined> = observable =>
+          observable.pipe(
+            concatMap(async pos => {
+              if (!pos) return undefined
+              const range = stencil.find(contains(pos))
+              return range && { ...repo, path, commit, ...range }
+            }),
+            unique()
+          )
+
+        const findBlobCodeInner = (range: RepoCommitPathRange): HTMLElement | undefined => {
+          return (
+            $1(`[data-line-number="${range.line + 1}"]`)?.parentElement?.querySelector<HTMLElement>(
+              '.blob-code-inner'
+            ) ??
+            $1(`#LC${range.line + 1}`) ??
+            undefined
+          )
+        }
+
+        return merge(
+          fromEvent(jsFileLineContainer, 'mousemove').pipe(
+            debounceTime(80),
+            positions(),
+            pos2Range,
+            range2Symbol(symbolAt),
+            switchMap(showTippy(findBlobCodeInner, j2d)),
+            ignoreElements()
+          )
+        ).subscribe(subscriber)
+      })
+    })
+  )
+}
+
+const showTippy = (
+  findBlobCodeInner: (range: RepoCommitPathRange) => HTMLElement | undefined,
+  j2d: (range: RepoCommitPathRange) => void
+) => (sym: { sym: Sym; range: RepoCommitPathRange } | undefined): Subscribable<never> => {
+  if (!sym) return EMPTY
+
+  const currentBlobCodeInner = findBlobCodeInner(sym.range)
+  if (!currentBlobCodeInner || !(currentBlobCodeInner instanceof HTMLElement)) {
+    console.warn('showTippy: expected blobCodeInner')
+    return EMPTY
+  }
+
+  const pickRepoCommitPathRange = (range: RepoCommitPathRange): RepoCommitPathRange =>
+    _.pick(range, ['owner', 'repo', 'commit', 'path', 'line', 'characterStart', 'characterEnd'])
+
+  const isDefinition = sym.sym.definition
+    ? isEqual(pickRepoCommitPathRange(sym.range), pickRepoCommitPathRange(sym.sym.definition))
+    : false
+  const hover = isDefinition
+    ? sym.sym.hover ?? 'Defined here.'
+    : _.compact([
+        sym.sym.hover,
+        sym.sym.definition &&
+          (sym.sym.definition.path === sym.range.path
+            ? `Defined on line ${sym.sym.definition.line + 1}`
+            : `Defined in ${sym.sym.definition?.path}`),
+      ]).join('\n\n---\n\n')
+  return new Observable(_subscriber => {
+    const s = new Subscription()
+    // TODO calling tippy() on multiple elements shows multiple tippys. Should only show 1.
+    const hoverPieces = selectRange(currentBlobCodeInner, sym.range.characterStart, sym.range.characterEnd)
+    const allPieces = symbolRanges(sym.sym).flatMap(range => {
+      if (range.path !== sym.range.path) return []
+      const x = findBlobCodeInner(range)
+      if (!x) return []
+      return selectRange(x, range.characterStart, range.characterEnd)
+    })
+    const ts = tippy(hoverPieces, {
+      ...tippystyleprops,
+      showOnCreate: true,
+      onShow: () => allPieces.forEach(piece => piece.classList.add('codewyng-highlighted')),
+      onHide: () => allPieces.forEach(piece => piece.classList.remove('codewyng-highlighted')),
+      onDestroy: () => allPieces.forEach(piece => piece.classList.remove('codewyng-highlighted')),
+      content: `<div style="overflow: hidden;">${md.render(hover)}</div>`,
+    })
+    s.add(() => ts.forEach(t => t.destroy()))
+    const def = sym.sym.definition
+    if (def && !isDefinition) {
+      const onClick = () => j2d(def)
+      hoverPieces.forEach(piece => {
+        piece.classList.add('codewyng-clickable')
+        piece.addEventListener('click', onClick)
+        s.add(() => {
+          piece.removeEventListener('click', onClick)
+          piece.classList.remove('codewyng-clickable')
+        })
+      })
+    }
+
+    return s
+  })
 }
 
 const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => {
@@ -1314,7 +1120,8 @@ const powerOn = (): Subscribable<never> => {
   const [_beforeFirstSlash, owner, repo, pageKind, ...pathComponents] = window.location.pathname.split('/')
   switch (pageKind) {
     case 'blob':
-      return onBlobPage()
+    case 'blame':
+      return onBlobOrBlame(pathComponents, { owner, repo })
     case 'pull':
       return onPRPage(pathComponents, { owner, repo })
     case 'commit':
