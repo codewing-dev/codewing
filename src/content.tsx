@@ -834,6 +834,7 @@ const Search: React.FC = () => {
               width: '100%',
               tableLayout: 'fixed',
               overflow: 'auto',
+              height: '80vh',
             }}
             className="codewyng-search-results"
           >
