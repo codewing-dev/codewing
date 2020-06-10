@@ -1222,6 +1222,7 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
 
   switch (prPageKind) {
     case 'files':
+    case 'commits':
       const elDiffView = $1('.diff-view')
       if (!elDiffView) {
         console.warn('expected a .diff-view to be present')
