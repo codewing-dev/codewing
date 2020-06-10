@@ -815,7 +815,7 @@ const Search: React.FC = () => {
   return (
     <Dialog open={shown} onClose={() => setShown(false)} maxWidth={false}>
       <DialogTitle>Quick search</DialogTitle>
-      <DialogContent style={{ display: 'flex', flexDirection: 'column', width: '900px' }}>
+      <DialogContent style={{ display: 'flex', flexDirection: 'column', width: '900px', height: '80vh' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
             <SearchIcon />
@@ -844,7 +844,6 @@ const Search: React.FC = () => {
               width: '100%',
               tableLayout: 'fixed',
               overflow: 'auto',
-              height: '80vh',
             }}
             className="codewyng-search-results"
           >
