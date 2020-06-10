@@ -938,6 +938,83 @@ const notReadySearchHelp = `
 Try running your search again in a few seconds.
 `
 
+const onDiffView = (commitSpec: CommitSpec, repo: Repo) => {
+  // tslint:disable-next-line: no-floating-promises
+  touch({ ...repo, commit: commitSpec.base, ref: commitSpec.ref })
+  // tslint:disable-next-line: no-floating-promises
+  touch({ ...repo, commit: commitSpec.head, ref: commitSpec.ref })
+
+  const elDiffView = $1('.diff-view')
+  if (!elDiffView) {
+    console.warn('expected a .diff-view to be present')
+    return EMPTY
+  }
+
+  const observeJsFilesUnder = (
+    root: HTMLElement,
+    onJsFile: (jsFile: HTMLElement) => Unsubscribable
+  ): Subscribable<never> =>
+    new Observable(_subscriber => {
+      observeNewChildren(root).subscribe(el => {
+        const elTeardown = new Subscription()
+        if (el.classList.contains('js-file')) elTeardown.add(onJsFile(el))
+        if (el.classList.contains('js-diff-progressive-container'))
+          elTeardown.add(observeJsFilesUnder(el, onJsFile).subscribe())
+        return elTeardown
+      })
+    })
+
+  const path2Anchor = new Map<string, string>()
+  const j2d = (range: RepoCommitPathRange) => {
+    const openInNewTab = () =>
+      window.open(
+        `https://github.com/${range.owner}/${range.repo}/blob/${range.commit}/${range.path}#L${range.line + 1}`,
+        '_newtab'
+      )
+    const anchor = path2Anchor.get(stringify(_.pick(range, 'owner', 'repo', 'path')))
+    if (!anchor) return openInNewTab()
+    const lineNum = findCommitLineNum(anchor, commitSpec, range.commit, range.line)
+    const blobCode = lineNum?.parentElement?.querySelector<HTMLElement>('.blob-code')
+    if (!lineNum || !blobCode) return openInNewTab()
+    senpai(lineNum, blobCode, 'center')
+  }
+
+  return observeJsFilesUnder(elDiffView, elJsFile => {
+    // tslint:disable-next-line: prefer-const
+    let [basePath, headPath] =
+      elJsFile.querySelector('.js-file-header clipboard-copy')?.getAttribute('value')?.split(' → ') ?? []
+    if (basePath === undefined) return new Subscription()
+    if (headPath === undefined) headPath = basePath
+
+    const loaded = elJsFile.querySelector('.js-blob-wrapper>.js-diff-table')
+    const willload = elJsFile.querySelector('.js-diff-load-container')
+    return concat(
+      !loaded ? EMPTY : of(loaded as HTMLElement),
+      !willload
+        ? EMPTY
+        : observeNewChildren(willload).pipe(
+            filter(element => element.classList.contains('js-blob-wrapper')),
+            concatMap(element => {
+              const jsDiffTable = element.querySelector('.js-diff-table')
+              return jsDiffTable ? of(jsDiffTable as HTMLElement) : EMPTY
+            })
+          )
+    )
+      .pipe(
+        tap(jsDiffTable => {
+          const anchor = jsDiffTable.getAttribute('data-diff-anchor')
+          if (!anchor) return
+          path2Anchor.set(stringify(_.pick({ ...repo, path: basePath }, 'owner', 'repo', 'path')), anchor)
+          path2Anchor.set(stringify(_.pick({ ...repo, path: headPath }, 'owner', 'repo', 'path')), anchor)
+        }),
+        switchMap(jsDiffTable =>
+          onDiff(jsDiffTable, { ...repo, path: basePath }, { ...repo, path: headPath }, commitSpec, j2d)
+        )
+      )
+      .subscribe()
+  })
+}
+
 const oldOnBlobPage = async () => {
   const selector = '.js-file-line-container'
   const fileContainer = $1(selector)
@@ -1012,33 +1089,37 @@ const onRepoPage = async () => {
   }
 }
 
-type CommitSpec = { base: string; head: string }
+type CommitSpec = { base: string; head: string; ref?: string }
+const determinePRFilesCommitSpec = (prNumberAsString: string): CommitSpec => {
+  const focus = $1('.toc-select details-menu')
+  if (focus) {
+    const dataUrl = focus.getAttribute('src')
+    if (dataUrl === null) throw new Error('determinePRFilesCommitSpec: expected src')
+    const url = new URL('https://placeholder.com' + dataUrl)
+    const base = url.searchParams.get('sha1')
+    const end = url.searchParams.get('sha2')
+    if (base === null || end === null) throw new Error('determinePRFilesCommitSpec: expected sha1 and sha2')
+    return { base, head: end, ref: `refs/pull/${prNumberAsString}/head` }
+  }
+  throw new Error('determinePRFilesCommitSpec: expected either commit or PR')
+}
+
 const determineCommitSpec = (): CommitSpec => {
-  let focus = $1('.sha-block>span.sha')
+  const focus = $1('.sha-block>span.sha')
   if (focus) {
     const current = focus.textContent
-    if (current === null || current.length !== 40) throw new Error('onDiff: expected current 40 char sha')
+    if (current === null || current.length !== 40) throw new Error('determineCommitSpec: expected current 40 char sha')
     const parent = $1('.sha-block>a')
     if (!parent) return { base: '0'.repeat(40), head: current }
     const href = parent.getAttribute('href')
-    if (!href) throw new Error('onDiff: expected parent href')
+    if (!href) throw new Error('determineCommitSpec: expected parent href')
     const components = href.split('/')
-    if (components.length === 0) throw new Error('onDiff: expected parent href components')
+    if (components.length === 0) throw new Error('determineCommitSpec: expected parent href components')
     const sha = components[components.length - 1]
-    if (sha.length !== 40) throw new Error('onDiff: expected parent href components 40 char sha')
+    if (sha.length !== 40) throw new Error('determineCommitSpec: expected parent href components 40 char sha')
     return { base: sha, head: current }
   }
-  focus = $1('.js-pull-refresh-on-pjax')
-  if (focus) {
-    const dataUrl = focus.getAttribute('data-url')
-    if (dataUrl === null) throw new Error('onDiff: expected data-url')
-    const url = new URL('https://placeholder.com' + dataUrl)
-    const base = url.searchParams.get('base_commit_oid')
-    const end = url.searchParams.get('end_commit_oid')
-    if (base === null || end === null) throw new Error('onDiff: expected base and end')
-    return { base, head: end }
-  }
-  throw new Error('onDiff: expected either commit or PR')
+  throw new Error('determineCommitSpec: expected either commit or PR')
 }
 
 type Repo = { owner: string; repo: string }
@@ -1223,81 +1304,7 @@ const onPRPage = (pathComponents: string[], repo: Repo): Subscribable<never> => 
   switch (prPageKind) {
     case 'files':
     case 'commits':
-      const elDiffView = $1('.diff-view')
-      if (!elDiffView) {
-        console.warn('expected a .diff-view to be present')
-        return EMPTY
-      }
-
-      const observeJsFilesUnder = (
-        root: HTMLElement,
-        onJsFile: (jsFile: HTMLElement) => Unsubscribable
-      ): Subscribable<never> =>
-        new Observable(_subscriber => {
-          observeNewChildren(root).subscribe(el => {
-            const elTeardown = new Subscription()
-            if (el.classList.contains('js-file')) elTeardown.add(onJsFile(el))
-            if (el.classList.contains('js-diff-progressive-container'))
-              elTeardown.add(observeJsFilesUnder(el, onJsFile).subscribe())
-            return elTeardown
-          })
-        })
-
-      const commitSpec = determineCommitSpec()
-      // tslint:disable-next-line: no-floating-promises
-      touch({ ...repo, commit: commitSpec.base, ref: `refs/pull/${prNumberAsString}/head` })
-      // tslint:disable-next-line: no-floating-promises
-      touch({ ...repo, commit: commitSpec.head, ref: `refs/pull/${prNumberAsString}/head` })
-
-      const path2Anchor = new Map<string, string>()
-      const j2d = (range: RepoCommitPathRange) => {
-        const openInNewTab = () =>
-          window.open(
-            `https://github.com/${range.owner}/${range.repo}/blob/${range.commit}/${range.path}#L${range.line + 1}`,
-            '_newtab'
-          )
-        const anchor = path2Anchor.get(stringify(_.pick(range, 'owner', 'repo', 'path')))
-        if (!anchor) return openInNewTab()
-        const lineNum = findCommitLineNum(anchor, commitSpec, range.commit, range.line)
-        const blobCode = lineNum?.parentElement?.querySelector<HTMLElement>('.blob-code')
-        if (!lineNum || !blobCode) return openInNewTab()
-        senpai(lineNum, blobCode, 'center')
-      }
-
-      return observeJsFilesUnder(elDiffView, elJsFile => {
-        // tslint:disable-next-line: prefer-const
-        let [basePath, headPath] =
-          elJsFile.querySelector('.js-file-header clipboard-copy')?.getAttribute('value')?.split(' → ') ?? []
-        if (basePath === undefined) return new Subscription()
-        if (headPath === undefined) headPath = basePath
-
-        const loaded = elJsFile.querySelector('.js-blob-wrapper>.js-diff-table')
-        const willload = elJsFile.querySelector('.js-diff-load-container')
-        return concat(
-          !loaded ? EMPTY : of(loaded as HTMLElement),
-          !willload
-            ? EMPTY
-            : observeNewChildren(willload).pipe(
-                filter(element => element.classList.contains('js-blob-wrapper')),
-                concatMap(element => {
-                  const jsDiffTable = element.querySelector('.js-diff-table')
-                  return jsDiffTable ? of(jsDiffTable as HTMLElement) : EMPTY
-                })
-              )
-        )
-          .pipe(
-            tap(jsDiffTable => {
-              const anchor = jsDiffTable.getAttribute('data-diff-anchor')
-              if (!anchor) return
-              path2Anchor.set(stringify(_.pick({ ...repo, path: basePath }, 'owner', 'repo', 'path')), anchor)
-              path2Anchor.set(stringify(_.pick({ ...repo, path: headPath }, 'owner', 'repo', 'path')), anchor)
-            }),
-            switchMap(jsDiffTable =>
-              onDiff(jsDiffTable, { ...repo, path: basePath }, { ...repo, path: headPath }, commitSpec, j2d)
-            )
-          )
-          .subscribe()
-      })
+      return onDiffView(determinePRFilesCommitSpec(prNumberAsString), repo)
     default:
       return EMPTY
   }
@@ -1310,6 +1317,8 @@ const powerOn = (): Subscribable<never> => {
       return onBlobPage()
     case 'pull':
       return onPRPage(pathComponents, { owner, repo })
+    case 'commit':
+      return onDiffView(determineCommitSpec(), { owner, repo })
     default:
       return EMPTY
   }
