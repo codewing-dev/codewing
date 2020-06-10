@@ -31,6 +31,7 @@ import {
   reduce,
   ignoreElements,
   expand,
+  scan,
 } from 'rxjs/operators'
 import { isEqual, once, uniq, compact, noop, groupBy, entries, mapValues, orderBy } from 'lodash'
 import tippy, { Props, Tippy, createSingleton, Instance } from 'tippy.js'
@@ -779,14 +780,12 @@ const Search: React.FC = () => {
       }
     }
   }
-  const [event, results] = useEventCallback<
-    React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>,
-    Result[] | 'not-ready' | 'init'
-  >(
+  const [onKeyDown, results]: [(arg: string | undefined) => void, Result[] | 'not-ready' | 'init'] = useEventCallback(
     events =>
       events.pipe(
-        map(e => e.target.value),
+        scan((query0, query) => query ?? query0, undefined),
         debounceTime(500),
+        filterDefined,
         switchMap(value => search(value))
       ),
     'init'
@@ -819,7 +818,13 @@ const Search: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
             <SearchIcon />
-            <Input autoFocus style={{ width: '600px' }} placeholder="Search..." onChange={event} />
+            <Input
+              autoFocus
+              style={{ width: '600px' }}
+              placeholder="Search..."
+              onChange={e => onKeyDown(e.target.value)}
+              onKeyDown={() => onKeyDown(undefined)}
+            />
           </div>
           {rtt && <div>({rtt} ms)</div>}
         </div>
