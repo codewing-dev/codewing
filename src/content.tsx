@@ -765,13 +765,18 @@ const Search: React.FC = () => {
       return 'init'
     } else {
       const start = new Date().getTime()
-      const res = await browser.runtime.sendMessage({
-        kind: 'serverCall',
-        args: { kind: 'query', ...determineCommit(), query },
-      })
+      try {
+        const res = await browser.runtime.sendMessage({
+          kind: 'serverCall',
+          args: { kind: 'query', ...determineCommit(), query },
+        })
 
-      setRTT(new Date().getTime() - start)
-      return res
+        setRTT(new Date().getTime() - start)
+        return res
+      } catch (e) {
+        if ('message' in e && e.message === 'not-ready') return 'not-ready'
+        else throw e
+      }
     }
   }
   const [event, results] = useEventCallback<
