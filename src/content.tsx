@@ -752,15 +752,19 @@ const onDiffView = (commitSpec: CommitSpec, repo: Repo) => {
     root: HTMLElement,
     onJsFile: (jsFile: HTMLElement) => Unsubscribable
   ): Subscribable<never> =>
-    new Observable(_subscriber => {
-      observeNewChildren(root).subscribe(el => {
-        const elTeardown = new Subscription()
-        if (el.classList.contains('js-file')) elTeardown.add(onJsFile(el))
-        if (el.classList.contains('js-diff-progressive-container'))
-          elTeardown.add(observeJsFilesUnder(el, onJsFile).subscribe())
-        return elTeardown
-      })
-    })
+    observeNewChildren(root).pipe(
+      mergeMap(
+        el =>
+          new Observable(_subscriber => {
+            const elTeardown = new Subscription()
+            if (el.classList.contains('js-file')) elTeardown.add(onJsFile(el))
+            if (el.classList.contains('js-diff-progressive-container'))
+              elTeardown.add(observeJsFilesUnder(el, onJsFile).subscribe())
+            return elTeardown
+          })
+      ),
+      ignoreElements()
+    )
 
   const path2Anchor = new Map<string, string>()
   const j2d = (range: RepoCommitPathRange) => {
