@@ -142,6 +142,7 @@ function positions(): OperatorFunction<MouseEvent, PositionWithKind | undefined>
       // Cursor is nowhere in the file
       return
     }
+    spannify(blobCodeInner)
     const firstEl = blobCodeInner.children[0]
     if (!firstEl) {
       // No text on this line
