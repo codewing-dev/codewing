@@ -6,7 +6,7 @@
   <br>
 </h1>
 
-<h4 align="center">Chrome extension for lightning fast code navigation on GitHub ⚡️</h4>
+<h4 align="center">Chrome extension for browsing GitHub like an IDE</h4>
 
 <p align="center">
   <a href="https://chrome.google.com/webstore/detail/njkkfaliiinmkcckepjdmgbmjljfdeee">

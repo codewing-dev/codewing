@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "CodeWyng",
   "version": "1.0",
-  "description": "Lightning fast code navigation for GitHub.",
+  "description": "Browse GitHub like an IDE.",
   "icons": {
     "128": "icon-128.png"
   },
