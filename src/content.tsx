@@ -977,7 +977,7 @@ const onBlobOrBlame = (pathComponents: string[], repo: Repo): Subscribable<never
 
   const [rev, ...pathPieces] = pathComponents
   const path = pathPieces.join('/')
-  const ref = rev.length === 40 && /^[0-9a-f]+$/.test(rev) ? undefined : rev
+  const ref = rev.length === 40 && /^[0-9a-f]+$/.test(rev) ? undefined : `refs/heads/${rev}`
   const { commit } = determineFile()
 
   const jsFileLineContainer = $1('.js-file-line-container')
