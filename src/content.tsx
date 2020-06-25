@@ -471,7 +471,7 @@ const mkSymbolAt = (): {
       kind: 'serverCall',
       args: {
         kind: 'symbolAt',
-        ..._.pick(range, ['owner', 'repo', 'commit', 'path', 'line']),
+        ..._.pick(range, ['owner', 'repo', 'commit', 'path', 'line', 'ref']),
         char: range.characterStart,
         ...(await auth()),
       },
