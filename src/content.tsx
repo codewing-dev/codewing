@@ -823,14 +823,6 @@ const onRepoPage = async () => {
   const div = document.createElement('div')
   $1('.blob-wrapper')?.parentElement?.prepend(div)
   ReactDOM.render(<Search />, div)
-  let commit: { owner: string; repo: string; commit: string } | undefined
-  try {
-    commit = determineCommit()
-  } catch (e) {}
-  if (commit) {
-    // tslint:disable-next-line: no-floating-promises
-    touch(commit)
-  }
 }
 
 type CommitSpec = { base: string; head: string; ref?: string }
@@ -987,6 +979,9 @@ const onBlobOrBlame = (pathComponents: string[], repo: Repo): Subscribable<never
   const path = pathPieces.join('/')
   const ref = rev.length === 40 && /^[0-9a-f]+$/.test(rev) ? undefined : rev
   const { commit } = determineFile()
+
+  // tslint:disable-next-line: no-floating-promises
+  touch({ ...repo, commit, ref })
 
   const jsFileLineContainer = $1('.js-file-line-container')
   if (!jsFileLineContainer) {
