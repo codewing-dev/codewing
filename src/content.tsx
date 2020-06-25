@@ -980,9 +980,6 @@ const onBlobOrBlame = (pathComponents: string[], repo: Repo): Subscribable<never
   const ref = rev.length === 40 && /^[0-9a-f]+$/.test(rev) ? undefined : rev
   const { commit } = determineFile()
 
-  // tslint:disable-next-line: no-floating-promises
-  touch({ ...repo, commit, ref })
-
   const jsFileLineContainer = $1('.js-file-line-container')
   if (!jsFileLineContainer) {
     console.log(`could not find .js-file-line-container TODO figure out why this happens`)
