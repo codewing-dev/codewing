@@ -455,7 +455,7 @@ const $n = function (selector: string): HTMLElement[] {
   return Array.from(document.querySelectorAll(selector))
 }
 
-const fetchStencil = async (repoCommitPath: RepoCommitPath): Promise<Stencil> =>
+const fetchStencil = async (repoCommitPath: RepoCommitPathMRef): Promise<Stencil> =>
   await browser.runtime.sendMessage({
     kind: 'serverCall',
     args: { kind: 'stencil', ...repoCommitPath, ...(await auth()) },
@@ -862,8 +862,9 @@ type Repo = { owner: string; repo: string }
 type RepoCommit = Repo & { commit: string }
 type RepoPath = Repo & { path: string }
 type RepoCommitPath = Repo & { commit: string } & { path: string }
-type RepoCommitPathPosition = Repo & { commit: string } & { path: string } & Position
+type RepoCommitPathMRef = Repo & { commit: string } & { path: string } & { ref?: string }
 type RepoCommitPathRange = Repo & { commit: string } & { path: string } & Range
+type RepoCommitPathRangeMRef = Repo & { commit: string } & { path: string } & Range & { ref?: string }
 
 const findCommitLineNum = (
   diffAnchor: string,
@@ -876,9 +877,9 @@ const findCommitLineNum = (
 }
 
 const range2Symbol = (
-  symbolAt: (range: RepoCommitPathRange) => Promise<Sym | undefined>
+  symbolAt: (range: RepoCommitPathRangeMRef) => Promise<Sym | undefined>
 ): OperatorFunction<
-  RepoCommitPathRange | undefined,
+  RepoCommitPathRangeMRef | undefined,
   { sym: Sym | undefined; range: RepoCommitPathRange } | undefined
 > =>
   concatMap(async range => {
@@ -900,8 +901,8 @@ const onDiff = (
   j2d: (range: RepoCommitPathRange) => void
 ): Subscribable<never> =>
   new Observable(subscriber => {
-    const getBaseStencil = _.once(() => fetchStencil({ ...basePath, commit: commitSpec.base }))
-    const getHeadStencil = _.once(() => fetchStencil({ ...headPath, commit: commitSpec.head }))
+    const getBaseStencil = _.once(() => fetchStencil({ ...basePath, commit: commitSpec.base, ref: commitSpec.ref }))
+    const getHeadStencil = _.once(() => fetchStencil({ ...headPath, commit: commitSpec.head, ref: commitSpec.ref }))
     const { symbolAt } = mkSymbolAt()
     const diffAnchor = jsDiffTable.getAttribute('data-diff-anchor')
     if (!diffAnchor) return new Subscription()
@@ -944,6 +945,7 @@ const onDiff = (
         debounceTime(80),
         positions(),
         pos2Range,
+        map(range => range && { ...range, ref: commitSpec.ref }),
         range2Symbol(symbolAt),
         switchMap(showTippy(findBlobCodeInner, j2d)),
         ignoreElements()
@@ -998,7 +1000,7 @@ const onBlobOrBlame = (pathComponents: string[], repo: Repo): Subscribable<never
     senpai(lineNum, blobCode, 'nearest')
   }
 
-  return from(fetchStencil({ ...repo, commit, path })).pipe(
+  return from(fetchStencil({ ...repo, commit, path, ref })).pipe(
     catchError(() => of(undefined)),
     switchMap(stencil => {
       if (!stencil) return EMPTY
@@ -1028,6 +1030,7 @@ const onBlobOrBlame = (pathComponents: string[], repo: Repo): Subscribable<never
             debounceTime(80),
             positions(),
             pos2Range,
+            map(range => range && { ...range, ref }),
             range2Symbol(symbolAt),
             switchMap(showTippy(findBlobCodeInner, j2d)),
             ignoreElements()
