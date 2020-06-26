@@ -819,12 +819,6 @@ const touch = async (args: RepoCommit & { ref?: string }): Promise<void> =>
     args,
   })
 
-const onRepoPage = async () => {
-  const div = document.createElement('div')
-  $1('.blob-wrapper')?.parentElement?.prepend(div)
-  ReactDOM.render(<Search />, div)
-}
-
 type CommitSpec = { base: string; head: string; ref?: string }
 const determinePRFilesCommitSpec = (prNumberAsString: string): CommitSpec => {
   const focus = $1('.toc-select details-menu')
@@ -1137,7 +1131,13 @@ export async function main(): Promise<void> {
   }
 
   if ($1('.repohead')) {
-    await onRepoPage()
+    const div = document.createElement('div')
+    document.body.appendChild(div)
+    ReactDOM.render(<Search />, div)
+    try {
+      // tslint:disable-next-line: no-floating-promises
+      touch(determineCommit())
+    } catch (e) {}
   }
 
   initCSS()
