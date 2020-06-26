@@ -43,7 +43,7 @@ const visitedCommits = new LRU<string, boolean>({ max: 1000 })
 
 const handlers: Record<RequestType, Parameters<typeof browser.runtime.onMessage.addListener>[0]> = {
   serverCall: async request => serverCall(request.args),
-  touch: async (commit: { args: { owner: string; repo: string; commit: string } }) => {
+  touch: async (commit: { args: { owner: string; repo: string; commit: string; ref?: string } }) => {
     const key = stringify(commit)
     if (!visitedCommits.has(key)) {
       visitedCommits.set(key, true)
