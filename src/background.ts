@@ -31,9 +31,6 @@ const serverCall = async (args: any): Promise<any> => {
   const response: any = await (
     await fetch(SERVER_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(args),
     })
   ).json()
