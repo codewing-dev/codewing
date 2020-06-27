@@ -110,7 +110,8 @@ function findHoverCharacter({
   // hovering over the second half of the character.
   let x = 0
   for (let i = 0; i < text.length; i++) {
-    x += characterWidth * (text[i] === '\t' ? tabSize : 1)
+    if (text[i] === '\t') x = characterWidth * Math.floor(x / characterWidth / tabSize + 1) * tabSize
+    else x += characterWidth
     if (x > contentX) {
       return i
     }
