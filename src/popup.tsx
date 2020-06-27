@@ -203,25 +203,21 @@ const IndexPage = () => {
   useEffect(() => firebase.auth().onAuthStateChanged(setUser), [])
 
   return (
-    <div>
+    <div style={{ padding: '0px 10px' }}>
       <Header user={user} />
-      Open a file in{' '}
-      <a
-        href="https://github.com/CodeWyng/codewyng/issues/1"
-        onClick={async () => await browser.tabs.create({ url: 'https://github.com/CodeWyng/codewyng/issues/1' })}
-      >
-        any supported language
-      </a>{' '}
-      and click on variables:{' '}
-      <ul>
-        {examples.map(e => (
-          <li key={e.url}>
-            <a href={e.url} onClick={async () => await browser.tabs.create({ url: e.url })}>
-              {e.language} example
-            </a>
-          </li>
-        ))}
-      </ul>
+      <Typography variant="body1">
+        Just installed? Try hovering over variables in:
+        <ul>
+          {examples.map(e => (
+            <li key={e.url}>
+              {e.language} example{' '}
+              <a href={e.url} onClick={async () => await browser.tabs.create({ url: e.url })}>
+                {e.linktext}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </Typography>
       {/* <Typography>Pro features</Typography>
       <AccessToken /> */}
     </div>

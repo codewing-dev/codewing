@@ -133,9 +133,16 @@ export const setDifference = <T>(...sets: Set<T>[]): Set<T> =>
   })
 
 export const examples = [
-  { language: 'JavaScript', url: 'https://github.com/CodeWyng/codewyng/blob/master/example.js' },
-  { language: 'TypeScript', url: 'https://github.com/CodeWyng/codewyng/blob/master/example.ts' },
-  { language: 'Python', url: 'https://github.com/CodeWyng/codewyng/blob/master/example.py' },
-  { language: 'Java', url: 'https://github.com/CodeWyng/codewyng/blob/master/example.java' },
-  { language: 'Go', url: 'https://github.com/CodeWyng/codewyng/blob/master/example.go' },
+  {
+    language: 'Java',
+    linktext: 'https://github.com/seata/seata AbstractRpcRemoting.java',
+    url:
+      'https://github.com/seata/seata/blob/c860c6bbb95ef45e72834d6bab9ed404b062b1ee/core/src/main/java/io/seata/core/rpc/netty/AbstractRpcRemoting.java#L333',
+  },
+  {
+    language: 'Go',
+    linktext: 'https://github.com/hashicorp/terraform context_input.go',
+    url:
+      'https://github.com/hashicorp/terraform/blob/03a4432595bce8b36e5dd89c232d9d484f2670b4/terraform/context_input.go#L55',
+  },
 ]
