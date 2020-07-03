@@ -28,7 +28,7 @@
   <a href="mailto:mail@codewyng.io">mail@codewyng.io</a>
   <br/>
   <br/>
-  <img src="readme/demo.gif"/>
+  <img src="https://storage.googleapis.com/codewyng-public/demo.gif"/>
 </p>
 
 # Features
