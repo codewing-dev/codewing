@@ -1,9 +1,6 @@
 <h1 align="center">
   <br>
   <a href="https://codewyng.io"><img src="https://storage.googleapis.com/codewyng-public/marquee-promo-tile.png" alt="CodeWyng" width="800"></a>
-  <br>
-  CodeWyng
-  <br>
 </h1>
 
 <h4 align="center">Browse GitHub like an IDE</h4>
