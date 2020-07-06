@@ -33,6 +33,8 @@ import {
   expand,
   scan,
   catchError,
+  take,
+  switchMapTo,
 } from 'rxjs/operators'
 import { isEqual, once, uniq, compact, noop, groupBy, entries, mapValues, orderBy } from 'lodash'
 import tippy, { Props, Tippy, createSingleton, Instance } from 'tippy.js'
@@ -84,6 +86,8 @@ import ReactMarkdown from 'react-markdown'
 import _ from 'lodash'
 
 import { useEventCallback } from 'rxjs-hooks'
+
+import { setStorage, observeStorage, observeUnderlineVariables } from './utils'
 
 function textWidth(text: string, font: string) {
   const element = document.createElement('canvas')
@@ -301,11 +305,11 @@ function initCSS() {
   sheet.insertRule('.senpai { background-color: rgba(255, 179, 109, 0.5) !important }')
   sheet.insertRule('.senpai2 { background-color: white; transition: background-color 2000ms linear !important }')
   sheet.insertRule('.codewyng-clickable { cursor: pointer }')
-  // sheet.insertRule(`.codewyng-highlightable {
-  //   text-decoration: underline;
-  //   text-decoration-style: dashed;
-  //   text-decoration-color: gray;
-  // }`)
+  sheet.insertRule(`.codewyng-highlightable {
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-decoration-color: gray;
+  }`)
 
   // !important so it shows up even on word diffs.
   sheet.insertRule('.codewyng-highlighted { background-color: rgba(255, 179, 109, 0.5) !important }')
@@ -888,65 +892,104 @@ const range2Symbol = (
     }
   })
 
+const observeIntersection = (
+  target: Element,
+  options: IntersectionObserverInit
+): Observable<IntersectionObserverEntry> =>
+  new Observable(subscriber => {
+    const observer = new IntersectionObserver(ientries => ientries.forEach(entry => subscriber.next(entry)), options)
+    observer.observe(target)
+    return () => observer.disconnect()
+  })
+
+const applyUnderline = (underline: boolean, el: HTMLElement | undefined, range: Range) => {
+  if (!el) return
+  for (const piece of selectRange(el, range.characterStart, range.characterEnd)) {
+    if (underline) piece.classList.add('codewyng-highlightable')
+    else piece.classList.remove('codewyng-highlightable')
+  }
+}
+
 const onDiff = (
   jsDiffTable: HTMLElement,
   basePath: RepoPath,
   headPath: RepoPath,
   commitSpec: CommitSpec,
   j2d: (range: RepoCommitPathRange) => void
-): Subscribable<never> =>
-  new Observable(subscriber => {
-    const getBaseStencil = _.once(() => fetchStencil({ ...basePath, commit: commitSpec.base, ref: commitSpec.ref }))
-    const getHeadStencil = _.once(() => fetchStencil({ ...headPath, commit: commitSpec.head, ref: commitSpec.ref }))
-    const { symbolAt } = mkSymbolAt()
-    const diffAnchor = jsDiffTable.getAttribute('data-diff-anchor')
-    if (!diffAnchor) return new Subscription()
-    const pos2Range: OperatorFunction<PositionWithKind | undefined, RepoCommitPathRange | undefined> = observable =>
-      observable.pipe(
-        concatMap(async pos => {
-          if (!pos) return undefined
-          const inject = async (stencil: Stencil, commit: string, repoPath: RepoPath) => {
-            const range = stencil.find(contains(pos))
-            if (!range) return undefined
-            return { ...repoPath, commit, ...range }
-          }
-          switch (pos.kind) {
-            case 'addition':
-              return await inject(await getHeadStencil(), commitSpec.head, headPath)
-            case 'deletion':
-              return await inject(await getBaseStencil(), commitSpec.base, basePath)
-            case 'context':
-              return await inject(await getBaseStencil(), commitSpec.base, basePath)
-            case 'normal':
-              return await inject(await getBaseStencil(), commitSpec.base, basePath)
-            default:
-              throw new Error('onDiff: unexpected kind')
-          }
-        }),
-        unique()
+): Observable<never> =>
+  observeIntersection(jsDiffTable, { rootMargin: '200px' }).pipe(
+    filter(entry => entry.isIntersecting),
+    take(1),
+    switchMap(() =>
+      from(
+        Promise.all([
+          fetchStencil({ ...basePath, commit: commitSpec.base, ref: commitSpec.ref }),
+          fetchStencil({ ...headPath, commit: commitSpec.head, ref: commitSpec.ref }),
+        ])
       )
+    ),
+    switchMap(
+      ([baseStencil, headStencil]): Observable<never> => {
+        const { symbolAt } = mkSymbolAt()
+        const diffAnchor = jsDiffTable.getAttribute('data-diff-anchor')
+        if (!diffAnchor) return EMPTY
+        const pos2Range: OperatorFunction<PositionWithKind | undefined, RepoCommitPathRange | undefined> = observable =>
+          observable.pipe(
+            concatMap(async pos => {
+              if (!pos) return undefined
+              const inject = async (stencil: Stencil, commit: string, repoPath: RepoPath) => {
+                const range = stencil.find(contains(pos))
+                if (!range) return undefined
+                return { ...repoPath, commit, ...range }
+              }
+              switch (pos.kind) {
+                case 'addition':
+                  return await inject(headStencil, commitSpec.head, headPath)
+                case 'deletion':
+                  return await inject(baseStencil, commitSpec.base, basePath)
+                case 'context':
+                  return await inject(baseStencil, commitSpec.base, basePath)
+                case 'normal':
+                  return await inject(baseStencil, commitSpec.base, basePath)
+                default:
+                  throw new Error('onDiff: unexpected kind')
+              }
+            }),
+            unique()
+          )
 
-    const findBlobCodeInner = (range: RepoCommitPathRange): HTMLElement | undefined => {
-      return (
-        findCommitLineNum(diffAnchor, commitSpec, range.commit, range.line)?.parentElement?.querySelector(
-          '.blob-code-inner'
-        ) ?? undefined
-      )
-    }
+        const findBlobCodeInner = (range: RepoCommitPathRange): HTMLElement | undefined => {
+          return (
+            findCommitLineNum(diffAnchor, commitSpec, range.commit, range.line)?.parentElement?.querySelector(
+              '.blob-code-inner'
+            ) ?? undefined
+          )
+        }
 
-    // TODO factor this out and reuse it for blob/blame views
-    return merge(
-      fromEvent(jsDiffTable, 'mousemove').pipe(
-        debounceTime(80),
-        positions(),
-        pos2Range,
-        map(range => range && { ...range, ref: commitSpec.ref }),
-        range2Symbol(symbolAt),
-        switchMap(showTippy(findBlobCodeInner, j2d)),
-        ignoreElements()
-      )
-    ).subscribe(subscriber)
-  })
+        // TODO factor this out and reuse it for blob/blame views
+        return merge(
+          fromEvent(jsDiffTable, 'mousemove').pipe(
+            debounceTime(80),
+            positions(),
+            pos2Range,
+            map(range => range && { ...range, ref: commitSpec.ref }),
+            range2Symbol(symbolAt),
+            switchMap(showTippy(findBlobCodeInner, j2d)),
+            ignoreElements()
+          ),
+          observeUnderlineVariables.pipe(
+            tap(underline => {
+              for (const range of headStencil)
+                applyUnderline(underline, findBlobCodeInner({ ...headPath, commit: commitSpec.head, ...range }), range)
+              for (const range of baseStencil)
+                applyUnderline(underline, findBlobCodeInner({ ...basePath, commit: commitSpec.base, ...range }), range)
+            }),
+            ignoreElements()
+          )
+        )
+      }
+    )
+  )
 
 ;(window as any).tippy = tippy
 
@@ -1021,16 +1064,23 @@ const onBlobOrBlame = (pathComponents: string[], repo: Repo): Subscribable<never
         }
 
         return merge(
+          observeUnderlineVariables.pipe(
+            tap(underline => {
+              for (const range of stencil)
+                applyUnderline(underline, findBlobCodeInner({ ...repo, path, commit, ...range }), range)
+            })
+          ),
           fromEvent(jsFileLineContainer, 'mousemove').pipe(
             debounceTime(80),
             positions(),
             pos2Range,
             map(range => range && { ...range, ref }),
             range2Symbol(symbolAt),
-            switchMap(showTippy(findBlobCodeInner, j2d)),
-            ignoreElements()
+            switchMap(showTippy(findBlobCodeInner, j2d))
           )
-        ).subscribe(subscriber)
+        )
+          .pipe(ignoreElements())
+          .subscribe(subscriber)
       })
     })
   )

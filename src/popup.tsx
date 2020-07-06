@@ -6,6 +6,7 @@ import VisibilityOff from '@material-ui/icons/VisibilityOff'
 import Alert from '@material-ui/lab/Alert'
 
 import { enforceAuth } from './features'
+import { setStorage, observeStorage, observeUnderlineVariables, setUnderlineVariables } from './utils'
 
 import firebase from 'firebase/app'
 import 'firebase/auth'
@@ -45,6 +46,7 @@ import ExitToAppIcon from '@material-ui/icons/ExitToApp'
 import { fromEvent, fromEventPattern, Observable, concat, from } from 'rxjs'
 import { map, filter } from 'rxjs/operators'
 import { RequestType, oauthDomains, examples } from './common'
+import { useObservable } from 'rxjs-hooks'
 
 const topTheme = createMuiTheme({
   palette: {
@@ -201,22 +203,36 @@ const AccessToken = () => {
 const IndexPage = () => {
   const [user, setUser] = useState<firebase.User | null | 'loading'>('loading')
   useEffect(() => firebase.auth().onAuthStateChanged(setUser), [])
+  const underlines = useObservable<boolean | 'loading'>(() => observeUnderlineVariables, 'loading')
 
   return (
     <div style={{ padding: '0px 10px' }}>
       <Header user={user} />
-      <Typography variant="body1">
-        Just installed? Try hovering over variables in:
-        <ul>
-          {examples.map(e => (
-            <li key={e.url}>
-              {e.language} example{' '}
-              <a href={e.url} onClick={async () => await browser.tabs.create({ url: e.url })}>
-                {e.linktext}
-              </a>
-            </li>
-          ))}
-        </ul>
+      <Typography component={'span'} variant="body1">
+        <div>
+          Just installed? Try hovering over variables in:
+          <ul>
+            {examples.map(e => (
+              <li key={e.url}>
+                {e.language} example{' '}
+                <a href={e.url} onClick={async () => await browser.tabs.create({ url: e.url })}>
+                  {e.linktext}
+                </a>
+              </li>
+            ))}
+          </ul>
+          Settings:
+          {underlines === 'loading' ? (
+            'Loading...'
+          ) : (
+            <ul>
+              <li>
+                <input type="checkbox" onChange={() => setUnderlineVariables(!underlines)} checked={underlines} />
+                Underline all variables
+              </li>
+            </ul>
+          )}
+        </div>
       </Typography>
       {/* <Typography>Pro features</Typography>
       <AccessToken /> */}
