@@ -12,7 +12,7 @@
     "highlight.js": "^10.0.3",
     "immutable": "^4.0.0-rc.12",
     "jquery": "^3.4.1",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.19",
     "markdown-it": "^11.0.0",
     "material-ui": "^0.20.2",
     "object-inspect": "^1.7.0",
