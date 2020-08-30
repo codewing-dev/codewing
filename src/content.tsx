@@ -519,13 +519,10 @@ const disableGitHubNative = () => {
 }
 
 const isPublic = () => {
-  const octolyticspublic =
-    document
-      .querySelector('head > meta[name="octolytics-dimension-repository_public"]')
-      ?.getAttribute('octolytics-dimension-repository_public') === 'true'
-  const publicclass = Boolean($1('.public'))
-
-  return octolyticspublic || publicclass
+  return (
+    document.querySelector('head > meta[name="octolytics-dimension-repository_public"]')?.getAttribute('content') ===
+    'true'
+  )
 }
 
 const tippystyleprops: Partial<Props> = {
