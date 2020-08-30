@@ -1,0 +1,10 @@
+---
+name: GitHub DOM check
+on:
+  schedule:
+    - cron: '0 0 * * *'
+jobs:
+  dom:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl https://github.com/gorilla/mux/blob/master/mux.go | grep "octolytics-dimension-repository_public\" content=\"true"
