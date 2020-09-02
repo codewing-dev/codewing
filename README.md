@@ -22,7 +22,8 @@
   <a href="https://chrome.google.com/webstore/detail/njkkfaliiinmkcckepjdmgbmjljfdeee"><img src="readme/chrome-web-store.png" align="center" width=20/> Chrome Web Store</a> •
   <a href="https://github.com/CodeWyng/codewyng">Issues</a> •
   <a href="https://twitter.com/CodeWyng">@CodeWyng</a> •
-  <a href="mailto:mail@codewyng.io">mail@codewyng.io</a>
+  <a href="mailto:mail@codewyng.io">mail@codewyng.io</a> •
+  <a href="https://discord.gg/UQ97S9"><img src="readme/discord.png" align="center" width=20/> Discord</a>
   <br/>
   <br/>
   <img src="https://storage.googleapis.com/codewyng-public/demo.gif"/>
