@@ -9,7 +9,7 @@
     "deep-object-diff": "^1.1.0",
     "fast-json-stable-stringify": "^2.1.0",
     "firebase": "^7.9.1",
-    "highlight.js": "^10.0.3",
+    "highlight.js": "^10.4.1",
     "immutable": "^4.0.0-rc.12",
     "jquery": "^3.4.1",
     "lodash": "^4.17.15",
