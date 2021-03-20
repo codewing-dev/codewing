@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-
-yarn --silent --frozen-lockfile
-yarn run dev
