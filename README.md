@@ -1,4 +1,8 @@
-# CodeWing - next level code navigation for Java and Go on GitHub
+# CodeWing
+
+Next level code navigation for Java and Go on GitHub.
+
+Check out the website: https://codewing.dev
 
 <h1 align="center">
   <br>
