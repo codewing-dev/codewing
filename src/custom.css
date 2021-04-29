@@ -1,0 +1,39 @@
+.tippy-box {
+  border-radius: 0.3em;
+  overflow: hidden;
+  border: 0.1em solid var(--color-border-primary, #ffbf005c);
+  color: var(--color-text-primary, rgb(20, 20, 20));
+  background-color: var(--color-bg-overlay, white);
+  padding: 0.3em;
+}
+
+.codewing-file-header {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+.codewing-file {
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+.codewing-file:not(:first-child) {
+  margin-top: 16px;
+}
+.codewing-file:not(:last-child) {
+  margin-bottom: 16px;
+}
+
+.codewing-hunk:not(:first-child) {
+  border-top: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.codewing-hunk a:hover {
+  text-decoration: none;
+}
+
+.codewing-hunk a {
+  color: black;
+}
+
+.codewing-highlight {
+  background-color: rgba(255, 179, 109, 0.5);
+  color: black;
+}
